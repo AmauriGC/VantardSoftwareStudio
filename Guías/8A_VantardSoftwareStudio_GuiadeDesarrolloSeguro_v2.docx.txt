@@ -1,0 +1,968 @@
+﻿GUÍA DE DESARROLLO
+SPA React  +  API Django REST Framework
+
+
+
+
+Estándar de programación y arquitectura para proyectos
+React + Django + MySQL
+
+
+Versión 2.0  —  2026
+________________
+
+
+1. Alcance y Principios        4
+1.1 Objetivo        4
+1.2 Principios de diseño        4
+1.3 Creación y configuración del proyecto        4
+2. Control de Versiones        5
+2.1 Reglas mínimas        5
+2.2 Estructura de Ramas (GitFlow Simplificado)        5
+2.3 Flujo de Trabajo        5
+2.4 Estándar de Commits (Conventional Commits)        5
+3. Stack Tecnológico        7
+3.1 Front-end        7
+3.2 Back-end        7
+3.3 Infraestructura        7
+4. Estructura de Carpetas        8
+4.1 Repositorio (monorepo)        8
+4.2 Estructura del Front-end        8
+4.3 Estructura del Back-end        8
+5. Contratos y Convenciones API        10
+5.1 Wrapper de respuesta estándar        10
+5.2 Endpoints REST        10
+5.3 Serializers y validación        10
+5.4 Reglas de URIs        10
+6. Arquitectura del Back-end        12
+6.1 Capas del back-end        12
+6.2 Respuesta estándar        12
+6.3 Manejo global de errores        12
+6.4 Permisos y roles        13
+7. Seguridad        14
+7.1 Principios generales        14
+7.2 Autenticación JWT        14
+7.3 Configuración de seguridad        14
+7.4 Seguridad de contraseñas        14
+7.5 Validación de datos        15
+7.6 Consultas seguras a base de datos        15
+7.6.1 Principio de mínimo privilegio        16
+7.6.2 Protección de credenciales        16
+7.6.3 Control de exposición de datos        16
+7.6.4 Manejo seguro de errores        16
+7.6.5 Integridad de datos        16
+7.6.6 Backups y recuperación        16
+7.6.7 Protección contra consultas pesadas (DoS lógico)        16
+8. Manejo de Errores        17
+8.1 Back-end: manejador global        17
+8.2 Mapa de excepciones        17
+8.3 Front-end: interceptor de Axios        17
+9. Arquitectura del Front-end        18
+9.1 Router y Guards de autenticación        18
+9.2 Store de autenticación        18
+9.3 Capa de servicios        18
+10. UI y Componentes        19
+10.1 Principios de componentización        19
+10.2 Componentes base recomendados        19
+10.3 Validación de formularios        19
+11. Flujo de Trabajo        20
+11.1 Ciclo de desarrollo de una feature        20
+11.2 Estrategia de ramas        20
+12. Ambientes y Configuración        21
+12.1 Variables de entorno — Front-end        21
+12.2 Configuración — Back-end        21
+12.3 Secretos y credenciales        21
+12.4 Creación de Base de Datos y Datos Iniciales        21
+13. Despliegue        23
+13.1 Con Docker        23
+13.2 Despliegue tradicional        23
+13.3 Consideraciones de producción        23
+14. Testing (Mínimo Viable)        24
+14.1 Back-end        24
+14.2 Front-end        24
+14.3 Seguridad        24
+15. Checklist de Calidad (Pre-merge)        25
+Back-end        25
+Front-end        25
+General        25
+Apéndice A: Convenciones de Nombres        26
+A.1 Back-end (Python/Django)        26
+A.2 Front-end (TypeScript/React)        26
+A.3 Base de datos        26
+Apéndice B: Inventario de Archivos por Módulo        28
+Back-end        28
+Front-end        28
+Apéndice C: Módulos Genéricos y Librerías        29
+________________
+1. Alcance y Principios
+
+
+1.1 Objetivo
+Esta guía describe el estándar de trabajo para construir aplicaciones con arquitectura de dos capas separadas: un front-end SPA (Single Page Application) y un back-end API REST. El objetivo es garantizar consistencia, seguridad y mantenibilidad en todos los proyectos del equipo.
+
+
+Los sistemas construidos bajo esta guía deben cumplir:
+* Front-end: SPA con rutas protegidas por autenticación y control de acceso por rol.
+* Back-end: API REST stateless con autenticación JWT, validación de entradas y manejo consistente de errores.
+* Estructura: código organizado por dominio/feature y capas bien definidas.
+1.2 Principios de diseño
+
+
+Principio
+	Descripción
+	Aplicación práctica
+	Separación de responsabilidades
+	Cada capa tiene un rol específico y no invade las demás.
+	La UI no hace lógica de negocio; la lógica de negocio no construye respuestas HTTP.
+	Contratos claros
+	Los endpoints reciben y devuelven estructuras definidas, no modelos internos.
+	Usar serializers/schemas validados. Nunca exponer el modelo directamente.
+	Seguridad por defecto
+	Todo está protegido salvo una lista blanca mínima y explícita.
+	Denegar por defecto; habilitar solo lo estrictamente necesario.
+	Mantenibilidad
+	Organización por dominio/feature con capas bien definidas.
+	Un módulo "usuarios" agrupa sus vistas, serializers, modelos y URLs propios.
+	Consistencia
+	Respuestas, nombres, rutas y manejo de errores homogéneos.
+	El mismo formato de respuesta en todos los endpoints del sistema.
+	1.3 Creación y configuración del proyecto
+Una vez aprobado el proyecto, será asignado un líder o responsable quien:
+* Proveerá el repositorio base y la configuración inicial del proyecto.
+* Vigilará el cumplimiento del estándar de programación definido en esta guía.
+* Proporcionará el manual técnico específico del proyecto con detalles de infraestructura y ambiente.
+
+
+Todo desarrollador debe leer esta guía completa antes de iniciar el desarrollo. El líder de proyecto resolverá dudas y definirá configuraciones particulares no cubiertas aquí.
+2. Control de Versiones
+
+
+Cada proyecto dispondrá de un repositorio de código para desarrollo en el sistema de control de versiones. Cada programador contará con cuenta y acceso al repositorio del proyecto donde esté asignado.
+2.1 Reglas mínimas
+* Cada programador del proyecto contará con cuenta y acceso al repositorio correspondiente.
+* Mantener un flujo de trabajo consistente por ramas y revisiones de código.
+* Nunca subir credenciales, contraseñas, tokens ni secretos al repositorio.
+* Cada commit debe tener un mensaje descriptivo y relacionado con el cambio realizado.
+2.2 Estructura de Ramas (GitFlow Simplificado)
+El proyecto utiliza una variante simplificada de GitFlow con tres tipos de ramas principales. Esta estrategia equilibra la estabilidad del código en producción con la agilidad del desarrollo diario.
+
+
+Rama
+	Propósito
+	Rama
+	default / main
+	Rama principal protegida. Solo recibe merges revisados y aprobados.
+	default / main
+	feature/<nombre>
+	Desarrollo de nuevas funcionalidades. Ej: feature/login-jwt
+	feature/<nombre>
+	fix/<nombre>
+	Corrección de bugs. Ej: fix/token-expiration
+	fix/<nombre>
+	develop
+	Rama secundaria. En la cual se suben los cambios ya probados de las ramas feat/fix
+	develop
+	2.3 Flujo de Trabajo
+* Crear rama desde develop: git checkout -b feature/nombre-feature
+* Desarrollar con commits pequeños y descriptivos.
+* Abrir Pull Request hacia develop con descripción del cambio.
+* Revisión de código aprobada por al menos un compañero o el líder.
+* Merge a develop y eliminación de la rama feature.
+* Cuando develop está estable y probado: merge a main.
+
+
+2.4 Estándar de Commits (Conventional Commits)
+Todos los commits deben seguir el formato: tipo(alcance): descripción breve
+
+
+* Reglas adicionales para commits:
+* Nunca subir credenciales, contraseñas, tokens ni secretos al repositorio.
+* El archivo .env debe estar en .gitignore en todo momento.
+* Commits atómicos: cada commit representa un cambio lógico único.
+* No mezclar features distintas en una misma rama.
+* Nunca hacer commit directamente a main o develop sin revisión previa.
+
+
+Rama
+	Propósito
+	Rama
+	fix/<nombre>
+	Corrección de bugs. Ej: fix/token-expiration
+	fix/<nombre>
+	feature/<nombre>
+	Desarrollo de nuevas funcionalidades. Ej: feature/login-jwt
+	feature/<nombre>
+	fix/<nombre>
+	Corrección de bugs. Ej: fix/token-expiration
+	fix/<nombre>
+	feature/<nombre>
+	Desarrollo de nuevas funcionalidades. Ej: feature/login-jwt
+	feature/<nombre>
+	fix/<nombre>
+	Corrección de bugs. Ej: fix/token-expiration
+	fix/<nombre>
+	feature/<nombre>
+	Desarrollo de nuevas funcionalidades. Ej: feature/login-jwt
+	feature/<nombre>
+	________________
+3. Stack Tecnológico
+
+
+3.1 Front-end
+
+
+Tecnología
+	Versión recomendada
+	Propósito
+	React
+	18+
+	Framework SPA principal
+	TypeScript
+	5+
+	Tipado estático para mayor seguridad
+	Vite
+	5+
+	Build tool y dev server
+	React Router
+	6+
+	Enrutamiento con guards
+	PrimeReact
+	Última estable
+	UI Kit de componentes
+	TailwindCSS
+	3+
+	Utilidades CSS
+	Axios
+	1+
+	Cliente HTTP con interceptores
+	React Hook Form
+	Última estable
+	Validación de formularios en front
+	3.2 Back-end
+
+
+Tecnología
+	Versión
+	Propósito
+	Python
+	3.11+
+	Lenguaje principal
+	Django
+	4.2+
+	Framework base del API
+	Django REST Framework
+	3.15+
+	Construcción de APIs REST
+	djangorestframework-simplejwt
+	Última estable
+	Autenticación JWT
+	django-cors-headers
+	Última estable
+	Configuración de CORS
+	MySQL
+	5.7+ / 8.0+
+	Base de datos relacional
+	3.3 Infraestructura
+* CI/CD: GitHub Actions, GitLab CI o Jenkins según el proyecto.
+* Nginx como servidor estático para el build del front-end y como proxy inverso al API.
+________________
+
+
+4. Estructura de Carpetas
+
+
+4.1 Repositorio (monorepo)
+proyecto-raiz/
+├── client/              # SPA (React)
+├── server/              # API REST (Django)
+├── docker-compose.yml   # Orquestación local
+└── README.md            # Instrucciones para correr en local
+4.2 Estructura del Front-end
+Dentro de client/src/:
+client/src/
+├── main.tsx                   # Bootstrap: monta app, registra router
+├── router/
+│   ├── index.ts               # Definición de rutas
+│   └── guards.ts              # Protección de rutas: auth y roles
+├── kernel/
+│   └── axiosClient.ts         # Instancia única de Axios + interceptores
+├── constants/
+│   └── endpoints.ts           # URLs de la API centralizadas
+├── auth/
+│   ├── services/AuthService.ts
+│   ├── store/authStore.ts
+│   └── views/LoginView.tsx
+├── view/                      # Vistas por dominio/rol
+│   ├── admin/
+│   └── user/
+├── components/                # Componentes reutilizables
+├── services/                  # Un archivo por dominio
+├── utils/                     # Funciones puras de apoyo
+└── types/                     # Interfaces y tipos TypeScript
+4.3 Estructura del Back-end
+Dentro de server/:
+server/
+├── config/                    # Configuración global del proyecto Django
+│   ├── settings.py
+│   ├── urls.py                # Rutas raíz
+│   └── wsgi.py
+├── apps/                      # Aplicaciones por dominio
+│   ├── auth_app/              # Autenticación y JWT
+│   │   ├── views.py
+│   │   ├── serializers.py
+│   │   └── urls.py
+│   └── usuarios/
+│       ├── models.py          # Modelos de datos
+│       ├── serializers.py     # Serializers de entrada/salida
+│       ├── views.py           # ViewSets y lógica de negocio
+│       ├── permissions.py     # Permisos personalizados
+│       └── urls.py
+├── kernel/
+│   ├── responses.py           # Wrapper de respuesta estándar
+│   └── exceptions.py          # Manejador global de errores
+├── requirements.txt
+└── manage.py
+________________
+
+
+5. Contratos y Convenciones API
+
+
+5.1 Wrapper de respuesta estándar
+Todas las respuestas del API deben usar el mismo formato. Esto garantiza que el front-end siempre reciba una estructura predecible.
+Estructura JSON de respuesta:
+{
+  "message": "Operación exitosa",
+  "data": { ... } | [ ... ] | null,
+  "error": false,
+  "status": 200
+}
+5.2 Endpoints REST
+Seguir estrictamente los verbos HTTP y la estructura de URIs:
+
+
+Método HTTP
+	Endpoint
+	Descripción
+	GET
+	/api/usuarios/
+	Lista todos los usuarios
+	GET
+	/api/usuarios/{id}/
+	Detalle del usuario con id
+	POST
+	/api/usuarios/
+	Crea un nuevo usuario
+	PUT
+	/api/usuarios/{id}/
+	Actualiza completamente al usuario
+	PATCH
+	/api/usuarios/{id}/
+	Actualización parcial del usuario
+	DELETE
+	/api/usuarios/{id}/
+	Elimina al usuario
+	POST
+	/auth/login/
+	Autenticación (pública)
+	POST
+	/auth/recover/
+	Solicitud de recuperación de contraseña
+	POST
+	/auth/reset/
+	Restablecimiento de contraseña
+	5.3 Serializers y validación
+Las vistas nunca reciben ni devuelven modelos directamente. Siempre se usan serializers para validar la entrada y formatear la salida.
+Regla general:
+* Un serializer de entrada valida los datos recibidos.
+* Un serializer de salida define exactamente qué campos se exponen al cliente.
+* Nunca exponer campos sensibles (password, tokens internos) en la respuesta.
+5.4 Reglas de URIs
+* Usar siempre trailing slash: ✓ /api/usuarios/  ✗ /api/usuarios
+* No usar mayúsculas: ✓ /tipo-usuario/  ✗ /TipoUsuario/
+* Usar guión - (no guión bajo _): ✓ /como-llegar/  ✗ /como_llegar/
+* Sin caracteres especiales ni acentos en las rutas.
+* Query strings para filtro, paginación y búsqueda: /usuarios/?estado=activo&pagina=1
+________________
+
+
+6. Arquitectura del Back-end
+
+
+6.1 Capas del back-end
+La arquitectura sigue el patrón estándar de Django REST Framework con separación clara de responsabilidades:
+
+
+Capa
+	Archivo
+	Responsabilidad
+	Serializer
+	serializers.py
+	Validar entrada, transformar datos, formatear salida
+	Vista / ViewSet
+	views.py
+	Recibir petición HTTP, llamar lógica, responder
+	Modelo
+	models.py
+	Representar la estructura de la base de datos
+	Permisos
+	permissions.py
+	Controlar quién puede hacer qué sobre cada recurso
+	URLs
+	urls.py
+	Mapear rutas a vistas
+	6.2 Respuesta estándar
+Toda respuesta del API debe seguir el mismo wrapper para que el front-end siempre reciba una estructura predecible. Esto se implementa en kernel/responses.py y se usa en todas las vistas.
+Ejemplo de implementación — kernel/responses.py:
+# kernel/responses.py
+from rest_framework.response import Response
+
+
+def success_response(data=None, message='Operación exitosa', status=200):
+    return Response({'message': message, 'data': data,
+                     'error': False, 'status': status}, status=status)
+
+
+def error_response(message='Error', status=400, data=None):
+    return Response({'message': message, 'data': data,
+                     'error': True, 'status': status}, status=status)
+
+
+# Uso en vistas — siempre usar el wrapper
+from kernel.responses import success_response
+
+
+class UsuarioViewSet(viewsets.ModelViewSet):
+    def list(self, request):
+        qs = Usuario.objects.all()
+        return success_response(data=UsuarioOutputSerializer(qs, many=True).data)
+6.3 Manejo global de errores
+Un manejador de excepciones centralizado en kernel/exceptions.py captura todos los errores y garantiza que la respuesta siempre tenga el formato estándar. Las vistas no deben manejar errores individualmente salvo casos muy específicos.
+Ejemplo de implementación — kernel/exceptions.py:
+# kernel/exceptions.py
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+
+
+def custom_exception_handler(exc, context):
+    response = exception_handler(exc, context)   # DRF default handler
+    if response is not None:
+        response.data = {
+            'message': str(response.data.get('detail', 'Error de validación')),
+            'data':    response.data,
+            'error':   True,
+            'status':  response.status_code,
+        }
+    return response
+
+
+# settings.py — registrar el handler global
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'kernel.exceptions.custom_exception_handler',
+}
+6.4 Permisos y roles
+Se definen permisos personalizados en permissions.py por aplicación. Las vistas declaran qué permisos se requieren. El sistema distingue al menos dos roles: administrador y usuario estándar.
+* Los endpoints protegidos requieren token JWT válido.
+* Los endpoints de administración requieren además el rol de administrador.
+* Solo los endpoints de autenticación (login, recuperar contraseña) son públicos.
+________________
+
+
+7. Seguridad
+
+
+7.1 Principios generales
+La autenticación verifica que el usuario es quien dice ser. La autorización verifica qué acciones puede realizar. Ambas ocurren en el back-end.
+7.2 Autenticación JWT
+El API es completamente stateless: sin sesiones en servidor, sin cookies de sesión. La autenticación se basa en tokens JWT enviados en el encabezado Authorization: Bearer <token>.
+* Los tokens tienen tiempo de expiración definido (configurable por ambiente).
+* El JWT secret nunca se almacena en el código; siempre en variables de entorno.
+* Se usa algoritmo HS256 o HS512 como mínimo. Nunca algoritmo "none".
+Ejemplo de configuración — settings.py con simplejwt:
+# settings.py — Configuración de djangorestframework-simplejwt
+from datetime import timedelta
+import os
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ALGORITHM':              'HS256',
+    'SIGNING_KEY':            os.environ.get('JWT_SECRET'),  # nunca hardcodeado
+    'AUTH_HEADER_TYPES':      ('Bearer',),
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',  # todo protegido por defecto
+    ],
+}
+7.3 Configuración de seguridad
+Por defecto, todos los endpoints requieren autenticación. Se define una lista blanca mínima y explícita con solo los endpoints públicos necesarios (login, recuperación de contraseña).
+7.4 Seguridad de contraseñas
+* Mínimo 8 caracteres combinando letras, números, símbolos y mayúsculas/minúsculas.
+* Almacenar siempre con hash seguro (Django usa PBKDF2 por defecto; también se admite bcrypt o Argon2).
+* Nunca MD5, SHA-1 o SHA-2 solos para contraseñas.
+* Limitar intentos de login para evitar fuerza bruta.
+* Recuperación de contraseña mediante enlace de un solo uso por correo electrónico.
+7.5 Validación de datos
+La validación siempre ocurre en el servidor. La validación en el cliente es solo feedback de UX, no una medida de seguridad.
+
+
+Tipo
+	Descripción
+	Sintáctica
+	Verifica el formato: solo dígitos, longitud máxima, formato email, etc.
+	Semántica
+	Verifica coherencia de negocio: fecha inicio no puede ser posterior a fecha fin.
+	Lista negra
+	Rechaza datos conocidos como maliciosos (mínimo obligatorio).
+	Lista blanca
+	Acepta solo valores permitidos (práctica recomendada cuando aplique).
+	
+
+La validación no hace el dato seguro por sí sola. Combinar siempre con: serializers tipados, ORM parametrizado y sanitización (trim, normalización).
+Ejemplo de serializer con validación y sanitización:
+# serializers.py — Serializer de entrada con validación
+from rest_framework import serializers
+from apps.usuarios.models import Usuario
+
+
+class UsuarioInputSerializer(serializers.Serializer):
+    nombre   = serializers.CharField(max_length=100)
+    email    = serializers.EmailField()
+    password = serializers.CharField(min_length=8, write_only=True)
+    rol      = serializers.ChoiceField(choices=['admin', 'usuario'])
+
+
+    def validate_email(self, value):
+        if Usuario.objects.filter(email=value).exists():
+            raise serializers.ValidationError('El correo ya está registrado.')
+        return value.lower().strip()   # sanitización: trim + normalización
+
+
+# Serializer de salida — define qué campos se exponen (password EXCLUIDO)
+class UsuarioOutputSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Usuario
+        fields = ['id', 'nombre', 'email', 'rol', 'fecha_creacion']
+7.6 Consultas seguras a base de datos
+Django ORM genera automáticamente consultas parametrizadas, lo que previene SQL Injection. Si se necesita SQL nativo, usar siempre parámetros nombrados. Nunca concatenar strings para construir consultas. Además del uso de Django ORM y consultas parametrizadas, se implementarán las siguientes medidas de seguridad:
+Ejemplos de código — ORM y SQL nativo parametrizado en Django:
+# ✅ ORM — Django genera SQL parametrizado automáticamente
+from apps.usuarios.models import Usuario
+
+
+usuario  = Usuario.objects.get(id=usuario_id)                  # WHERE id = %s
+activos  = Usuario.objects.filter(activo=True)                 # WHERE activo = %s
+busqueda = Usuario.objects.filter(nombre__icontains=termino)   # LIKE %termino%
+
+
+# ✅ SQL nativo con parámetros (cuando es absolutamente necesario)
+from django.db import connection
+with connection.cursor() as cursor:
+    cursor.execute(
+        'SELECT id, nombre FROM usuarios WHERE email = %s',
+        [email_input]     # lista de parámetros — nunca concatenar f-strings
+    )
+    rows = cursor.fetchall()
+
+
+# ❌ NUNCA — vulnerable a SQL Injection
+# Usuario.objects.raw(f'SELECT * FROM usuarios WHERE id={user_input}')
+# cursor.execute('SELECT * FROM usuarios WHERE email=' + email_input)
+
+
+7.6.1 Principio de mínimo privilegio
+La base de datos no será accedida con un usuario administrador. Se creará un usuario específico para la aplicación con permisos limitados únicamente a las operaciones necesarias (SELECT, INSERT, UPDATE, DELETE).
+7.6.2 Protección de credenciales
+Las credenciales de la base de datos:
+* No se almacenan en el repositorio.
+* Se gestionan mediante variables de entorno
+* Se excluyen mediante .gitignore.
+7.6.3 Control de exposición de datos
+* No se expondrán directamente campos sensibles en serializers.
+* Se evitará enviar datos innecesarios en las respuestas. 
+* Se aplicará paginación para evitar extracción masiva de datos.
+7.6.4 Manejo seguro de errores
+Los errores de la base de datos:
+* No mostrarán trazas completas al usuario.
+* No revelarán nombres de tablas, columnas o estructura interna.
+7.6.5 Integridad de datos
+Se implementarán:
+* Restricciones NOT NULL.
+* UNIQUE.
+* FOREIGN KEY con integridad referencial.
+* Índices en campos críticos.
+7.6.6 Backups y recuperación
+Se establecerá:
+* Política de respaldos periódicos.
+* Pruebas de restauración.
+7.6.7 Protección contra consultas pesadas (DoS lógico)
+Se implementarán:
+* Límites de paginación. 
+* Validación de parámetros de filtrado.
+* Restricción de tamaño máximo de respuesta.
+
+
+
+
+8. Manejo de Errores
+
+
+8.1 Back-end: manejador global
+Un manejador centralizado (custom exception handler de DRF) garantiza que el front-end siempre reciba el wrapper estándar, independientemente del tipo de error. Las vistas no manejan errores individualmente.
+8.2 Mapa de excepciones
+
+
+Excepción / Caso
+	HTTP Status
+	Cuándo usarlo
+	DoesNotExist / NotFound
+	404 Not Found
+	Registro no encontrado en BD
+	AuthenticationFailed
+	401 Unauthorized
+	Login fallido o token inválido
+	PermissionDenied
+	403 Forbidden
+	Usuario sin permisos para el recurso
+	ValidationError
+	400 Bad Request
+	Datos de entrada inválidos en serializer
+	ParseError
+	400 Bad Request
+	JSON malformado en el cuerpo de la petición
+	Exception (genérica)
+	500 Internal Server Error
+	Cualquier error no esperado
+	8.3 Front-end: interceptor de Axios
+El interceptor de respuesta en kernel/axiosClient.ts maneja globalmente los errores HTTP. En caso de 401 (token expirado o inválido), fuerza el cierre de sesión y redirige al login. Los componentes solo manejan el estado de éxito o el mensaje de error normalizado.
+________________
+
+
+9. Arquitectura del Front-end
+
+
+9.1 Router y Guards de autenticación
+Cada ruta protegida declara los metadatos requiresAuth y roles. El guard beforeEach del router verifica que el usuario esté autenticado y tenga el rol requerido antes de permitir el acceso. Caso contrario, redirige al login o a una pantalla de acceso denegado.
+9.2 Store de autenticación
+El store de autenticación gestiona el estado reactivo del usuario, el token y el rol activo. Persiste en localStorage. Expone métodos para iniciar sesión, cerrar sesión y verificar roles.
+9.3 Capa de servicios
+Cada dominio tiene su propio archivo de servicio. Los componentes nunca construyen URLs manualmente ni hacen llamadas HTTP directamente. Todas las URLs están centralizadas en constants/endpoints.ts.
+________________
+
+
+10. UI y Componentes
+
+
+10.1 Principios de componentización
+* Los componentes base (BaseInput, BaseTable, etc.) no conocen dominios del negocio.
+* Las vistas de dominio orquestan componentes base y llaman a los servicios correspondientes.
+* Un componente tiene una sola responsabilidad: presentar datos o capturar entrada.
+10.2 Componentes base recomendados
+
+
+Componente
+	Responsabilidad
+	Props clave
+	BaseInput.tsx
+	Campo de texto reutilizable con validación visual
+	value, label, error, type
+	BaseTable.tsx
+	Tabla con paginación y columnas configurables
+	columns, rows, loading
+	BaseModal.tsx
+	Modal/dialog reutilizable
+	visible, title, onClose
+	ConfirmDialog.tsx
+	Confirmación de acciones destructivas (eliminar, etc.)
+	message, onConfirm, onCancel
+	ToastNotification.tsx
+	Notificaciones globales (éxito/error/info)
+	— (global via hook)
+	10.3 Validación de formularios
+La validación en el front-end es solo feedback de UX. El back-end es la fuente de verdad. Los formularios deben mostrar mensajes claros al usuario y deshabilitar el envío mientras hay errores de formato obvios.
+________________
+
+
+11. Flujo de Trabajo
+
+
+11.1 Ciclo de desarrollo de una feature
+Cada nueva funcionalidad sigue este orden para garantizar que el contrato API esté claro antes de implementar el front-end:
+* 1. Definir endpoints y serializers → acordar el contrato API con el equipo.
+* 2. Implementar back-end: serializer, vista, permisos, URLs.
+* 3. Implementar servicio en front (Service.ts + endpoints.ts).
+* 4. Crear vista y componentes.
+* 5. Conectar ruta en router con requiresAuth y roles.
+* 6. Verificar checklist de calidad → pull request / revisión de código.
+11.2 Estrategia de ramas
+
+
+Rama
+	Propósito
+	feature/<nombre>
+	Nueva funcionalidad. Ej: feature/modulo-reportes
+	fix/<nombre>
+	Corrección de bug. Ej: fix/validacion-email
+	hotfix/<nombre>
+	Corrección urgente en producción.
+	
+
+* La rama principal (default/main) está protegida. Solo acepta merges con revisión aprobada.
+* Los commits deben ser pequeños, atómicos y con mensajes descriptivos.
+* No mezclar features distintas en una misma rama.
+________________
+
+
+12. Ambientes y Configuración
+
+
+12.1 Variables de entorno — Front-end
+Vite expone variables de entorno con el prefijo VITE_. Crear un archivo por ambiente:
+# .env.development
+VITE_API_URL=http://localhost:8000
+VITE_APP_NAME=MiSistema
+
+
+# .env.production
+VITE_API_URL=https://api.midominio.cl
+VITE_APP_NAME=MiSistema
+
+
+Nunca hardcodear URLs ni credenciales en el código fuente. Siempre usar variables de entorno.
+12.2 Configuración — Back-end
+Django usa settings.py como archivo de configuración. Se recomienda dividirlo por ambiente (desarrollo, producción) o usar variables de entorno para los valores sensibles:
+# Variables de entorno requeridas
+SECRET_KEY=...             # Clave secreta de Django
+DEBUG=False                # False siempre en producción
+DATABASE_URL=...           # Cadena de conexión a MySQL
+JWT_SECRET=...             # Secreto para firmar tokens JWT
+ALLOWED_HOSTS=...          # Dominios permitidos
+12.3 Secretos y credenciales
+* Nunca subir al repositorio: contraseñas de BD, JWT secret, credenciales de correo.
+* En desarrollo local: usar archivo .env (en .gitignore) o variables del sistema.
+* En producción: variables de entorno del servidor o secrets del orquestador.
+
+
+12.4 Creación de Base de Datos y Datos Iniciales
+
+
+La creación e inicialización de la base de datos se realizará mediante scripts SQL independientes del código de la aplicación.
+
+
+Se deberán definir los siguientes elementos:
+
+
+* Script de creación de la base de datos y creación de tablas y restricciones.
+* Script de carga de datos iniciales (seed data).
+
+
+Los scripts deberán:
+* Ser versionados en el repositorio del proyecto.
+* Separar la estructura de los datos iniciales.
+* Ser ejecutables de manera independiente.
+* Permitir la recreación completa del entorno desde cero.
+________________
+13. Despliegue
+
+
+13.1 Con Docker
+El docker-compose.yml orquesta tres servicios: la base de datos (MySQL), el API (Django + Gunicorn) y el front-end (React build servido por Nginx). Cada servicio recibe su configuración mediante variables de entorno, sin hardcodear valores.
+13.2 Despliegue tradicional
+Para despliegue sin contenedores:
+   * Front-end: ejecutar el build de Vite (npm run build) y servir la carpeta dist con Nginx.
+   * Back-end: configurar Gunicorn como servidor WSGI de Django, con Nginx como proxy inverso.
+   * Base de datos: MySQL 5.7+ o 8.0+ en servidor dedicado o servicio administrado.
+13.3 Consideraciones de producción
+   * Ejecutar collectstatic de Django para servir archivos estáticos correctamente.
+   * Configurar HTTPS obligatorio en Nginx.
+   * Revisar ALLOWED_HOSTS y CORS_ALLOWED_ORIGINS antes de cada despliegue.
+   * Nunca tener DEBUG=True en producción.
+________________
+
+
+14. Testing (Mínimo Viable)
+
+
+14.1 Back-end
+Como mínimo, se deben escribir pruebas para:
+   * Endpoints protegidos: verificar que devuelven 401 sin token y 403 sin el rol correcto.
+   * Lógica de negocio principal: validaciones de serializers y reglas críticas del dominio.
+   * Flujo de autenticación: login exitoso, login fallido, token inválido.
+14.2 Front-end
+Mínimo obligatorio: el type-check (tsc --noEmit) y npm run build deben pasar sin errores antes de hacer merge.
+   * Si se agrega testing unitario: usar Vitest + React Testing Library.
+   * Probar hooks/stores y lógica de validación como mínimo.
+
+
+14.3 Seguridad
+Se realizarán 2 pruebas de seguridad por cada módulo del sistema.
+________________
+
+
+15. Checklist de Calidad (Pre-merge)
+
+
+Antes de solicitar revisión de código y hacer merge, verificar todos los puntos:
+Back-end
+   * Todos los endpoints responden con el wrapper de respuesta estándar.
+   * Los serializers tienen validaciones completas con mensajes útiles.
+   * El manejador global de errores cubre todos los casos del módulo.
+   * Los endpoints públicos (whitelist) son mínimos y explícitos.
+   * Los modelos no se exponen directamente; siempre se usan serializers.
+   * Contraseñas almacenadas con hash seguro. Nunca en texto plano.
+   * No hay credenciales ni secretos hardcodeados en el código.
+   * Las pruebas mínimas están escritas y pasando.
+Front-end
+   * Router guards configurados con requiresAuth y roles en cada ruta protegida.
+   * Las URLs del API están en constants/endpoints.ts, no inline en los componentes.
+   * Los servicios no filtran detalles internos del backend a la UI.
+   * El interceptor de Axios maneja correctamente el 401 y fuerza logout.
+   * type-check (tsc --noEmit) pasa sin errores de TypeScript.
+   * npm run build pasa sin errores.
+General
+   * No hay console.log ni código de debug en el commit.
+   * Variables de entorno actualizadas en los archivos .env correspondientes.
+   * Rama con nombre correcto (feature/... o fix/...) y commits descriptivos.
+   * Revisión de código solicitada y aprobada antes del merge.
+________________
+
+
+Apéndice A: Convenciones de Nombres
+
+
+A.1 Back-end (Python/Django)
+
+
+Elemento
+	Notación
+	Ejemplo
+	Modelos
+	PascalCase
+	Usuario, TipoDocumento
+	Serializers
+	PascalCase + Serializer
+	UsuarioSerializer, LoginSerializer
+	Vistas (ViewSets)
+	PascalCase + ViewSet
+	UsuarioViewSet, AuthViewSet
+	Funciones y métodos
+	snake_case
+	obtener_lista(), crear_usuario()
+	Variables
+	snake_case
+	usuario_id, fecha_inicio
+	Constantes
+	UPPER_SNAKE_CASE
+	JWT_SECRET, MAX_INTENTOS
+	Archivos
+	snake_case
+	models.py, serializers.py, views.py
+	A.2 Front-end (TypeScript/React)
+
+
+Elemento
+	Notación
+	Ejemplo
+	Archivos de componente
+	PascalCase.tsx
+	LoginView.tsx, BaseTable.tsx
+	Archivos de servicio
+	PascalCase + Service
+	UsersService.ts, AuthService.ts
+	Variables y funciones
+	camelCase
+	userData, fetchUsers, isLoading
+	Constantes
+	UPPER_SNAKE_CASE
+	API_URL, MAX_RETRIES
+	Tipos e interfaces
+	PascalCase
+	UserDto, AuthState, LoginResponse
+	Hooks personalizados
+	use + Nombre
+	useNotify, usePermissions
+	A.3 Base de datos
+
+
+Elemento
+	Notación
+	Ejemplo
+	Tablas
+	snake_case plural
+	usuarios, roles, tipos_documento
+	Columnas
+	snake_case
+	fecha_creacion, rol_id, email_verificado
+	Primary keys
+	id
+	id (autoincremental)
+	Foreign keys
+	<tabla>_id
+	rol_id, usuario_id
+	________________
+
+
+Apéndice B: Inventario de Archivos por Módulo
+
+
+El siguiente es el inventario de archivos para un módulo típico (ejemplo: "usuarios"):
+Back-end
+apps/usuarios/
+├── models.py          # Modelos de datos (estructura de la BD)
+├── serializers.py     # Serializers de entrada y salida
+├── views.py           # ViewSets con lógica de negocio
+├── permissions.py     # Permisos personalizados
+└── urls.py            # Rutas del módulo
+Front-end
+# En services/
+UsersService.ts        # Listar(), ObtenerPorId(), Crear(), Actualizar(), Eliminar()
+
+
+# En types/
+user.types.ts          # interface UserDto, interface UserResponse
+
+
+# En view/admin/
+UsuariosView.tsx        # Vista principal: tabla + botones de acción
+UsuarioFormView.tsx     # Formulario de creación y edición
+
+
+# En router/index.ts (agregar rutas)
+{ path: "usuarios",       component: UsuariosView,    meta: { requiresAuth: true, roles: ["ADMIN"] } }
+{ path: "usuarios/crear", component: UsuarioFormView, meta: { requiresAuth: true, roles: ["ADMIN"] } }
+________________
+
+
+Apéndice C: Módulos Genéricos y Librerías
+
+
+En el desarrollo de módulos genéricos, librerías y componentes compartidos, contemplar:
+
+
+Área
+	Descripción
+	Seguridad
+	Utilidades JWT, hashing de contraseñas, permisos personalizados
+	Auditoría / Log
+	Registro de acciones de usuario con fecha, IP y acción realizada
+	Conexión a BD
+	Configuración de base de datos por ambiente
+	Cifrado
+	Utilidades para datos sensibles que requieran cifrado adicional
+	Validaciones
+	Sanitización: trim, normalización, purificación de entrada
+	Control de errores
+	Manejador global + excepciones de dominio propias
+	Comunicación
+	Utilidades de email para notificaciones y recuperación de contraseña
+	
+
+Aplicar patrones de diseño que favorezcan la modularidad y reutilización: Factory, Strategy, Observer según corresponda.
