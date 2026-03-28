@@ -37,6 +37,48 @@ export default function BaseTable({
     right: "text-right",
   };
 
+  const skeletonCount = pageSize > 0 ? Math.min(pageSize, 5) : 5;
+
+  function renderBody() {
+    if (loading) {
+      return Array.from({ length: skeletonCount }).map((_, i) => (
+        <tr key={`skeleton-${i}`} className="border-b border-gray-100 last:border-0">
+          {columns.map((col) => (
+            <td key={col.key} className="py-3 px-4">
+              <div className="h-4 rounded bg-gray-100 animate-pulse" />
+            </td>
+          ))}
+        </tr>
+      ));
+    }
+
+    if (visibleRows.length === 0) {
+      return (
+        <tr>
+          <td colSpan={columns.length} className="py-10 text-center text-sm text-gray-400">
+            {emptyText}
+          </td>
+        </tr>
+      );
+    }
+
+    return visibleRows.map((row, rowIdx) => (
+      <tr
+        key={row.id ?? `row-${rowIdx}`}
+        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+      >
+        {columns.map((col) => (
+          <td
+            key={col.key}
+            className={`py-3 px-4 text-gray-600 ${alignClass[col.align] ?? alignClass.left}`}
+          >
+            {col.render ? col.render(row) : (row[col.key] ?? "—")}
+          </td>
+        ))}
+      </tr>
+    ));
+  }
+
   return (
     <div className="flex flex-col">
       <div className="overflow-x-auto">
@@ -56,42 +98,7 @@ export default function BaseTable({
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              Array.from({ length: pageSize > 0 ? Math.min(pageSize, 5) : 5 }).map((_, i) => (
-                <tr key={i} className="border-b border-gray-100 last:border-0">
-                  {columns.map((col) => (
-                    <td key={col.key} className="py-3 px-4">
-                      <div className="h-4 rounded bg-gray-100 animate-pulse" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : visibleRows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="py-10 text-center text-sm text-gray-400"
-                >
-                  {emptyText}
-                </td>
-              </tr>
-            ) : (
-              visibleRows.map((row, rowIdx) => (
-                <tr
-                  key={row.id ?? rowIdx}
-                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                >
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={`py-3 px-4 text-gray-600 ${alignClass[col.align] ?? alignClass.left}`}
-                    >
-                      {col.render ? col.render(row) : (row[col.key] ?? "—")}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            {renderBody()}
           </tbody>
         </table>
       </div>

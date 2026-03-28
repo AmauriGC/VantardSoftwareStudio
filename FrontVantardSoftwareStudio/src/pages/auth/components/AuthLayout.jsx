@@ -1,3 +1,4 @@
+import PropTypes from "prop-types";
 import { Globe } from "lucide-react";
 
 import BaseCard from "../../../components/BaseCard";
@@ -27,3 +28,10 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
     </div>
   );
 }
+
+AuthLayout.propTypes = {
+  title: PropTypes.string,
+  subtitle: PropTypes.string,
+  children: PropTypes.node.isRequired,
+  footer: PropTypes.node,
+};
