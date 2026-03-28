@@ -9,6 +9,14 @@
 !.env.example
 !.env.*.example
 
+# SonarQube (token local va por variable de entorno, no en archivo)
+.sonar/
+sonar-project.local.properties
+
+# Guías / documentación interna (no es código del repo)
+Guías/
+Guias/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
