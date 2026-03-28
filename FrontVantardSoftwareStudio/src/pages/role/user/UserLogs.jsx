@@ -2,17 +2,8 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
+import { formatearFecha } from "../../../utils/formatters";
 import { logsAcceso, despliegues, usuarioActual } from "../../../data/mockData";
-
-function formatearFecha(iso) {
-  return new Date(iso).toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function UserLogs() {
   const [busqueda, setBusqueda] = useState("");

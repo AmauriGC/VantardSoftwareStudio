@@ -3,17 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
+import { formatearFecha } from "../../../utils/formatters";
 import { usuarioActual, despliegues, logsAcceso } from "../../../data/mockData";
-
-function formatearFecha(iso) {
-  return new Date(iso).toLocaleString("es-MX", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 const ESTADO_CLASES = {
   Activo: "bg-green-50 text-green-700",
