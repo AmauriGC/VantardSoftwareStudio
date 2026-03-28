@@ -1,0 +1,201 @@
+import { useState, useRef } from "react";
+import { UploadCloud, FileArchive, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import BaseCard from "../../../components/BaseCard";
+import BaseButton from "../../../components/BaseButton";
+import { usuarioActual, planes } from "../../../data/mockData";
+import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+
+export default function UserNuevoDespliegue() {
+  const navigate = useNavigate();
+  const inputRef = useRef(null);
+  const [dominio, setDominio] = useState("");
+  const [archivo, setArchivo] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const planActual = planes.find((p) => p.nombre === usuarioActual.plan) || planes[0];
+  const limiteKB = planActual.cargaMaxMB * 1024;
+
+  const handleArchivo = (file) => {
+    if (!file) return;
+    if (!file.name.endsWith(".zip")) {
+      showErrorAlert({ title: "Formato incorrecto", text: "Solo se aceptan archivos .zip" });
+      return;
+    }
+    if (file.size > limiteKB * 1024) {
+      showErrorAlert({
+        title: "Archivo demasiado grande",
+        text: `Tu plan permite archivos de hasta ${planActual.cargaMaxMB} MB.`,
+      });
+      return;
+    }
+    setArchivo(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleArchivo(e.dataTransfer.files[0]);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!dominio.trim()) {
+      showErrorAlert({ title: "Falta el dominio", text: "Ingresa un nombre para tu sitio." });
+      return;
+    }
+    if (!archivo) {
+      showErrorAlert({ title: "Falta el archivo", text: "Selecciona un archivo .zip con tu sitio." });
+      return;
+    }
+    setIsSubmitting(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    setIsSubmitting(false);
+    await showSuccessAlert({
+      title: "¡Despliegue creado!",
+      text: `Tu sitio "${dominio}.vss.app" fue desplegado correctamente.`,
+    });
+    navigate("/user/despliegue");
+  };
+
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      {/* Encabezado */}
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Nuevo despliegue</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Sube tu sitio web estático como archivo ZIP
+        </p>
+      </div>
+
+      {/* Info del plan */}
+      <BaseCard className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <UploadCloud className="h-4 w-4" />
+          </div>
+          <p className="text-sm text-gray-700">
+            Tu plan <span className="font-semibold">{usuarioActual.plan}</span> permite cargas de
+            hasta{" "}
+            <span className="font-semibold">{planActual.cargaMaxMB} MB</span> por archivo.
+          </p>
+        </div>
+      </BaseCard>
+
+      {/* Formulario */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <BaseCard className="p-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Configuración</h2>
+          <div className="flex flex-col gap-4">
+            <div>
+              <label htmlFor="dominio-input" className="text-sm font-medium text-gray-900 block mb-2">
+                Nombre del dominio
+              </label>
+              <div className="flex items-center">
+                <input
+                  id="dominio-input"
+                  type="text"
+                  placeholder="mi-sitio"
+                  value={dominio}
+                  onChange={(e) =>
+                    setDominio(e.target.value.replaceAll(/[^a-z0-9-]/gi, "").toLowerCase())
+                  }
+                  className="h-11 flex-1 rounded-l-md border border-r-0 border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
+                />
+                <span className="h-11 flex items-center px-3 rounded-r-md border border-gray-200 bg-gray-50 text-sm text-gray-500 shrink-0">
+                  .vss.app
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Solo letras minúsculas, números y guiones.
+              </p>
+            </div>
+          </div>
+        </BaseCard>
+
+        <BaseCard className="p-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Archivo del sitio</h2>
+          {/* Zona de arrastre */}
+          <button
+            type="button"
+            className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors cursor-pointer w-full ${
+              isDragging
+                ? "border-blue-400 bg-blue-50"
+                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".zip"
+              className="sr-only"
+              onChange={(e) => handleArchivo(e.target.files?.[0])}
+            />
+            <div className="h-12 w-12 rounded-xl bg-gray-100 text-gray-400 flex items-center justify-center">
+              <UploadCloud className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                Arrastra tu archivo aquí o{" "}
+                <span className="text-blue-600">haz clic para seleccionar</span>
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Solo archivos .zip — máximo {planActual.cargaMaxMB} MB
+              </p>
+            </div>
+          </button>
+
+          {/* Archivo seleccionado */}
+          {archivo && (
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <FileArchive className="h-4 w-4 text-blue-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{archivo.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {(archivo.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setArchivo(null)}
+                className="ml-3 p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-200 transition-colors shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </BaseCard>
+
+        {/* Acciones */}
+        <div className="flex justify-end gap-3">
+          <BaseButton
+            type="button"
+            variant="secondary"
+            onClick={() => navigate("/user/despliegue")}
+            disabled={isSubmitting}
+          >
+            Cancelar
+          </BaseButton>
+          <BaseButton type="submit" isLoading={isSubmitting}>
+            <UploadCloud className="h-4 w-4 mr-1.5" />
+            Desplegar sitio
+          </BaseButton>
+        </div>
+      </form>
+    </div>
+  );
+}
