@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const PAGE_SIZE_DEFAULT = 10;
+const SKELETON_ROW_IDS = ["sk-0", "sk-1", "sk-2", "sk-3", "sk-4"];
 
 /**
  * BaseTable — tabla con columnas configurables, paginación y estado de carga.
@@ -41,42 +42,52 @@ export default function BaseTable({
 
   function renderBody() {
     if (loading) {
-      return Array.from({ length: skeletonCount }).map((_, i) => (
-        <tr key={`skeleton-${i}`} className="border-b border-gray-100 last:border-0">
-          {columns.map((col) => (
-            <td key={col.key} className="py-3 px-4">
-              <div className="h-4 rounded bg-gray-100 animate-pulse" />
-            </td>
+      return (
+        <>
+          {SKELETON_ROW_IDS.slice(0, skeletonCount).map((skId) => (
+            <tr key={skId} className="border-b border-gray-100 last:border-0">
+              {columns.map((col) => (
+                <td key={col.key} className="py-3 px-4">
+                  <div className="h-4 rounded bg-gray-100 animate-pulse" />
+                </td>
+              ))}
+            </tr>
           ))}
-        </tr>
-      ));
+        </>
+      );
     }
 
     if (visibleRows.length === 0) {
       return (
-        <tr>
-          <td colSpan={columns.length} className="py-10 text-center text-sm text-gray-400">
-            {emptyText}
-          </td>
-        </tr>
+        <>
+          <tr>
+            <td colSpan={columns.length} className="py-10 text-center text-sm text-gray-400">
+              {emptyText}
+            </td>
+          </tr>
+        </>
       );
     }
 
-    return visibleRows.map((row, rowIdx) => (
-      <tr
-        key={row.id ?? `row-${rowIdx}`}
-        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-      >
-        {columns.map((col) => (
-          <td
-            key={col.key}
-            className={`py-3 px-4 text-gray-600 ${alignClass[col.align] ?? alignClass.left}`}
+    return (
+      <>
+        {visibleRows.map((row, rowIdx) => (
+          <tr
+            key={row.id ?? `row-${rowIdx}`}
+            className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
           >
-            {col.render ? col.render(row) : (row[col.key] ?? "—")}
-          </td>
+            {columns.map((col) => (
+              <td
+                key={col.key}
+                className={`py-3 px-4 text-gray-600 ${alignClass[col.align] ?? alignClass.left}`}
+              >
+                {col.render ? col.render(row) : (row[col.key] ?? "—")}
+              </td>
+            ))}
+          </tr>
         ))}
-      </tr>
-    ));
+      </>
+    );
   }
 
   return (
