@@ -59,13 +59,11 @@ export default function BaseTable({
 
     if (visibleRows.length === 0) {
       return (
-        <>
-          <tr>
-            <td colSpan={columns.length} className="py-10 text-center text-sm text-gray-400">
-              {emptyText}
-            </td>
-          </tr>
-        </>
+        <tr>
+          <td colSpan={columns.length} className="py-10 text-center text-sm text-gray-400">
+            {emptyText}
+          </td>
+        </tr>
       );
     }
 
