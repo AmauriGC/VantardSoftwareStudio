@@ -3,8 +3,27 @@ import { useNavigate } from "react-router-dom";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
+import BaseTable from "../../../components/BaseTable";
+import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
 import { usuarioActual, despliegues, logsAcceso } from "../../../data/mockData";
+
+const logColumns = [
+  { key: "ruta", header: "Ruta" },
+  { key: "metodo", header: "Método" },
+  { key: "ip", header: "IP" },
+  {
+    key: "codigo",
+    header: "Código",
+    render: (l) => <HttpBadge codigo={l.codigo} />,
+  },
+  {
+    key: "fecha",
+    header: "Fecha",
+    align: "right",
+    render: (l) => formatearFecha(l.fecha),
+  },
+];
 
 const ESTADO_CLASES = {
   Activo: "bg-green-50 text-green-700",
@@ -129,58 +148,12 @@ export default function UserDespliegue() {
         <div className="px-5 py-4 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-900">Registros de acceso</h2>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {["Ruta", "Método", "IP", "Código", "Fecha"].map((col) => (
-                  <th
-                    key={col}
-                    className={`py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                      col === "Fecha" ? "text-right" : "text-left"
-                    }`}
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {logs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-10 text-center text-sm text-gray-400">
-                    Sin registros de acceso aún.
-                  </td>
-                </tr>
-              ) : (
-                logs.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="py-3 px-5 font-mono text-xs text-gray-700">{l.ruta}</td>
-                    <td className="py-3 px-5 text-xs text-gray-500">{l.metodo}</td>
-                    <td className="py-3 px-5 font-mono text-xs text-gray-500">{l.ip}</td>
-                    <td className="py-3 px-5">
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium ${
-                          l.codigo >= 400
-                            ? "bg-red-50 text-red-700"
-                            : "bg-green-50 text-green-700"
-                        }`}
-                      >
-                        {l.codigo}
-                      </span>
-                    </td>
-                    <td className="py-3 px-5 text-right text-xs text-gray-400">
-                      {formatearFecha(l.fecha)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <BaseTable
+          columns={logColumns}
+          rows={logs}
+          emptyText="Sin registros de acceso aún."
+          pageSize={0}
+        />
       </BaseCard>
     </div>
   );

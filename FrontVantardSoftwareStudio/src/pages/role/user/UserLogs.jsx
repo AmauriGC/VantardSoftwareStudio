@@ -2,6 +2,8 @@ import { Search } from "lucide-react";
 import { useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
+import BaseTable from "../../../components/BaseTable";
+import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
 import { logsAcceso, despliegues, usuarioActual } from "../../../data/mockData";
 
@@ -22,9 +24,30 @@ export default function UserLogs() {
       (misDesplieguesMap.get(l.despliegueId) || "").toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  const columns = [
+    {
+      key: "sitio",
+      header: "Sitio",
+      render: (l) => misDesplieguesMap.get(l.despliegueId) || l.despliegueId,
+    },
+    { key: "ruta", header: "Ruta" },
+    { key: "metodo", header: "Método" },
+    { key: "ip", header: "IP" },
+    {
+      key: "codigo",
+      header: "Código",
+      render: (l) => <HttpBadge codigo={l.codigo} />,
+    },
+    {
+      key: "fecha",
+      header: "Fecha",
+      align: "right",
+      render: (l) => formatearFecha(l.fecha),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-6 p-6">
-      {/* Encabezado */}
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Registros de acceso</h1>
         <p className="text-sm text-gray-500 mt-0.5">
@@ -32,7 +55,6 @@ export default function UserLogs() {
         </p>
       </div>
 
-      {/* Tabla de logs */}
       <BaseCard className="overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
           <div>
@@ -50,61 +72,12 @@ export default function UserLogs() {
             />
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {["Sitio", "Ruta", "Método", "IP", "Código", "Fecha"].map((col) => (
-                  <th
-                    key={col}
-                    className={`py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                      col === "Fecha" ? "text-right" : "text-left"
-                    }`}
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-10 text-center text-sm text-gray-400">
-                    No se encontraron registros.
-                  </td>
-                </tr>
-              ) : (
-                filtrados.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="py-3 px-5 font-mono text-xs text-gray-700">
-                      {misDesplieguesMap.get(l.despliegueId) || l.despliegueId}
-                    </td>
-                    <td className="py-3 px-5 font-mono text-xs text-gray-700">{l.ruta}</td>
-                    <td className="py-3 px-5 text-xs text-gray-500">{l.metodo}</td>
-                    <td className="py-3 px-5 font-mono text-xs text-gray-500">{l.ip}</td>
-                    <td className="py-3 px-5">
-                      <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium ${
-                          l.codigo >= 400
-                            ? "bg-red-50 text-red-700"
-                            : "bg-green-50 text-green-700"
-                        }`}
-                      >
-                        {l.codigo}
-                      </span>
-                    </td>
-                    <td className="py-3 px-5 text-right text-xs text-gray-400">
-                      {formatearFecha(l.fecha)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <BaseTable
+          columns={columns}
+          rows={filtrados}
+          emptyText="No se encontraron registros."
+          pageSize={0}
+        />
       </BaseCard>
     </div>
   );
