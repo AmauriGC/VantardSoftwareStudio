@@ -4,6 +4,6 @@ export const AUTH_ROLES = {
 };
 
 export const AUTH_EMAILS = {
-  ADMIN: "20233tn102@utez.edu.mx",
-  USER: "20233tn092@utez.edu.mx",
+  ADMIN: "admin@vantard.com",
+  USER: "test@test.com",
 };

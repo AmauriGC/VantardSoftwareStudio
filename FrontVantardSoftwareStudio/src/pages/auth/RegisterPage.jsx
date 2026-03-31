@@ -1,14 +1,18 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 
 import BaseButton from "../../components/BaseButton";
 import BaseInput from "../../components/BaseInput";
 import AuthLayout from "./components/AuthLayout";
 import { useValidatedField, VALIDATION_GROUPS } from "../../config/validator";
-import { showSuccessAlert } from "../../kernel/alerts";
+import { showErrorAlert, showSuccessAlert } from "../../kernel/alerts";
+import AuthService from "./service/AuthService";
+import { setAuth } from "./store/authStore";
+import { AUTH_ROLES } from "./constants/authConstants";
 
 export default function RegisterPage() {
+  const navigate = useNavigate();
   const fullNameField = useValidatedField("", VALIDATION_GROUPS.fullName);
   const emailField = useValidatedField("", VALIDATION_GROUPS.authEmail);
   const passwordField = useValidatedField("", VALIDATION_GROUPS.registerPassword);
@@ -20,8 +24,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
     const ok =
@@ -31,13 +36,43 @@ export default function RegisterPage() {
       confirmPasswordField.validate();
     if (!ok) return;
 
-    // Sin consumo por ahora (UX solamente)
+    setError("");
     setIsSubmitting(true);
+
+    const result = await AuthService.register({
+      fullName: fullNameField.value,
+      email: emailField.value,
+      password: passwordField.value,
+    });
+
+    if (!result.ok) {
+      const message = result.message || "No se pudo crear la cuenta.";
+      setError(message);
+      showErrorAlert({
+        title: "No se pudo crear la cuenta",
+        text: message,
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!result.data?.accessToken || !result.data?.refreshToken) {
+      setError("El backend no devolvio los tokens esperados.");
+      showErrorAlert({
+        title: "Registro incompleto",
+        text: "La cuenta se creo, pero la respuesta del servidor no trae tokens validos.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    setAuth(result.data);
     showSuccessAlert({
       title: "Cuenta creada",
-      text: "Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.",
+      text: "Tu cuenta fue creada correctamente.",
     });
     setIsSubmitting(false);
+    navigate(result.data.role === AUTH_ROLES.ADMIN ? "/admin" : "/user", { replace: true });
   };
 
   return (
@@ -128,6 +163,8 @@ export default function RegisterPage() {
             límite de subida). Las mejoras se asignan por un admin después de confirmar el pago.
           </p>
         </div>
+
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <BaseButton type="submit" className="h-11 w-full" disabled={isSubmitting} isLoading={isSubmitting}>
           Crear cuenta

@@ -20,6 +20,7 @@ import {
 import { getAuth, clearAuth } from "../pages/auth/store/authStore";
 import { confirmAction } from "../kernel/alerts";
 import { AUTH_ROLES } from "../pages/auth/constants/authConstants";
+import AuthService from "../pages/auth/service/AuthService";
 
 const NAV_ADMIN = [
   { to: "/admin", label: "Panel general", icon: LayoutDashboard, end: true },
@@ -155,6 +156,7 @@ export default function DashboardLayout() {
       cancelText: "Cancelar",
     });
     if (!ok) return;
+    await AuthService.logout(auth?.refreshToken);
     clearAuth();
     navigate("/", { replace: true });
   };

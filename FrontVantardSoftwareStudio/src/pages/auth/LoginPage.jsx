@@ -6,7 +6,7 @@ import BaseButton from "../../components/BaseButton";
 import BaseInput from "../../components/BaseInput";
 import AuthLayout from "./components/AuthLayout";
 import AuthService from "./service/AuthService";
-import { AUTH_EMAILS, AUTH_ROLES } from "./constants/authConstants";
+import { AUTH_ROLES } from "./constants/authConstants";
 import { getRole, setAuth } from "./store/authStore";
 import { useValidatedField, VALIDATION_GROUPS } from "../../config/validator";
 import { showErrorAlert, showInfoAlert } from "../../kernel/alerts";
@@ -28,8 +28,8 @@ export default function LoginPage() {
       if (expired) {
         globalThis.sessionStorage.removeItem(SESSION_EXPIRED_KEY);
         showInfoAlert({
-          title: "Sesión expirada",
-          text: "Tu sesión expiró o no es válida. Inicia sesión nuevamente.",
+          title: "Sesion expirada",
+          text: "Tu sesion expiro o no es valida. Inicia sesion nuevamente.",
         });
       }
     } catch {
@@ -47,7 +47,7 @@ export default function LoginPage() {
     }
   }, [navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (isSubmitting) return;
@@ -57,13 +57,24 @@ export default function LoginPage() {
 
     setError("");
     setIsSubmitting(true);
-    const result = AuthService.login({ email: emailField.value, password: passwordField.value });
+
+    const result = await AuthService.login({ email: emailField.value, password: passwordField.value });
 
     if (!result.ok) {
-      setError(result.message || "No se pudo iniciar sesión.");
+      setError(result.message || "No se pudo iniciar sesion.");
       showErrorAlert({
-        title: "No se pudo iniciar sesión",
-        text: result.message || "Verifica tus credenciales e inténtalo de nuevo.",
+        title: "No se pudo iniciar sesion",
+        text: result.message || "Verifica tus credenciales e intentalo de nuevo.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!result.data?.accessToken || !result.data?.refreshToken) {
+      setError("El backend no devolvio los tokens esperados.");
+      showErrorAlert({
+        title: "No se pudo iniciar sesion",
+        text: "La respuesta del servidor no contiene tokens validos.",
       });
       setIsSubmitting(false);
       return;
@@ -71,24 +82,25 @@ export default function LoginPage() {
 
     setAuth(result.data);
     navigate(result.data.role === AUTH_ROLES.ADMIN ? "/admin" : "/user", { replace: true });
+    setIsSubmitting(false);
   };
 
   const fillAdmin = () => {
     if (isSubmitting) return;
-    emailField.setValue(AUTH_EMAILS.ADMIN, { shouldValidate: true });
-    passwordField.setValue("123456", { shouldValidate: true });
+    emailField.setValue("admin@vantard.com", { shouldValidate: true });
+    passwordField.setValue("Admin1234!", { shouldValidate: true });
     setError("");
   };
 
   const fillUser = () => {
     if (isSubmitting) return;
-    emailField.setValue(AUTH_EMAILS.USER, { shouldValidate: true });
-    passwordField.setValue("123456", { shouldValidate: true });
+    emailField.setValue("test@test.com", { shouldValidate: true });
+    passwordField.setValue("Test1234!", { shouldValidate: true });
     setError("");
   };
 
   return (
-    <AuthLayout title="Bienvenido de vuelta" subtitle="Inicia sesión en tu cuenta de VSS">
+    <AuthLayout title="Bienvenido de vuelta" subtitle="Inicia sesion en tu cuenta de VSS">
       <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
         <BaseInput
           id="email"
@@ -105,9 +117,9 @@ export default function LoginPage() {
         <BaseInput
           id="password"
           type={showPassword ? "text" : "password"}
-          label="Contraseña"
+          label="Contrasena"
           autoComplete="current-password"
-          placeholder="Ingresa tu contraseña"
+          placeholder="Ingresa tu contrasena"
           value={passwordField.value}
           onChange={passwordField.onChange}
           onBlur={passwordField.onBlur}
@@ -117,7 +129,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               className="h-11 px-3 text-gray-500 hover:text-gray-700"
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -126,18 +138,18 @@ export default function LoginPage() {
 
         <div className="flex items-center justify-end">
           <Link to="/auth/recuperar" className="text-sm text-blue-600 hover:text-blue-700">
-            ¿Olvidaste tu contraseña?
+            Olvidaste tu contrasena?
           </Link>
         </div>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <BaseButton type="submit" className="h-11 w-full" disabled={isSubmitting} isLoading={isSubmitting}>
-          Iniciar sesión
+          Iniciar sesion
         </BaseButton>
 
         <p className="text-center text-sm text-gray-600">
-          ¿No tienes una cuenta?{" "}
+          No tienes una cuenta?{" "}
           <Link to="/auth/registro" className="text-blue-600 hover:text-blue-700">
             Crear cuenta
           </Link>
