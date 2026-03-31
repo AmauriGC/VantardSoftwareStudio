@@ -17,8 +17,16 @@ export function getAuth() {
 }
 
 export function setAuth(auth) {
+  if (!auth || typeof auth !== "object") return;
   try {
-    globalThis.localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    const normalized = {
+      role: auth.role ?? null,
+      email: auth.email ?? null,
+      user: auth.user ?? null,
+      accessToken: auth.accessToken ?? null,
+      refreshToken: auth.refreshToken ?? null,
+    };
+    globalThis.localStorage.setItem(AUTH_KEY, JSON.stringify(normalized));
   } catch {
     // ignore
   }
@@ -36,6 +44,15 @@ export function getRole() {
   return getAuth()?.role ?? null;
 }
 
+export function getAccessToken() {
+  return getAuth()?.accessToken ?? null;
+}
+
+export function getRefreshToken() {
+  return getAuth()?.refreshToken ?? null;
+}
+
 export function isAuthenticated() {
-  return Boolean(getAuth()?.role);
+  const auth = getAuth();
+  return Boolean(auth?.role && auth?.accessToken);
 }

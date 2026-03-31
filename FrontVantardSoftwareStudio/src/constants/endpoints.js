@@ -3,12 +3,16 @@
 
 export const ENDPOINTS = {
   auth: {
-    login: "/auth/login/",
-    recover: "/auth/recover/",
-    reset: "/auth/reset/",
+    register: "/api/users/register/",
+    login: "/api/users/login/",
+    refresh: "/api/users/refresh/",
+    logout: "/api/users/logout/",
   },
   users: {
-    list: "/api/usuarios/",
-    detail: (id) => `/api/usuarios/${id}/`,
+    profile: "/api/users/profile/",
+    changePassword: "/api/users/profile/password/",
+    deleteAccount: "/api/users/profile/delete/",
+    list: "/api/users/",
+    updateStatus: (id) => `/api/users/${id}/status/`,
   },
 };
