@@ -1,0 +1,256 @@
+﻿1. Introducción
+La base de datos del sistema de hosting de sitios web estáticos tiene como objetivo gestionar usuarios, planes de servicio, despliegues de sitios web y versiones de los mismos, así como solicitudes de cambio de plan.
+El sistema está diseñado para simular el funcionamiento de una plataforma de hosting real, donde los usuarios pueden solicitar un plan, desplegar su sitio web y subir nuevas versiones del mismo. Para garantizar la integridad de los datos y automatizar ciertas tareas del sistema, se implementaron triggers, eventos programados, vistas e índices.
+________________
+
+
+2. Flujo General del Sistema
+El funcionamiento del sistema sigue el siguiente flujo lógico:
+1. Un usuario se registra en el sistema.
+2. El usuario solicita un plan de hosting.
+3. Un administrador revisa la solicitud.
+4. Si la solicitud es aprobada, se activa el plan del usuario.
+5. El usuario crea un deployment para su sitio web.
+6. El usuario puede subir versiones de su sitio web.
+7. El sistema controla el almacenamiento y mantiene el historial de versiones.
+Flujo simplificado:
+users
+  ↓
+plan_change_requests
+  ↓ (approved)
+user_plans
+  ↓
+deployments
+  ↓
+deployment_versions
+________________
+
+
+3. Descripción de las Tablas
+3.1 Tabla roles
+Esta tabla almacena los diferentes roles que pueden existir en el sistema.
+Ejemplo de roles:
+* administrador
+* usuario
+Propósito:
+Permitir la gestión de permisos y control de acceso dentro del sistema.
+Campos principales:
+* id → identificador del rol
+* role_name → nombre del rol
+________________
+
+
+3.2 Tabla users
+Esta tabla almacena la información de los usuarios registrados en la plataforma.
+Un usuario puede:
+* solicitar planes
+* desplegar un sitio web
+* subir nuevas versiones de su sitio
+Campos principales:
+* id → identificador del usuario
+* role_id → rol asignado al usuario
+* first_name → nombre
+* last_name → apellido
+* email → correo electrónico
+* password_hash → contraseña cifrada
+* status → estado del usuario
+Restricciones importantes:
+* El correo electrónico es único dentro del sistema.
+________________
+
+
+3.3 Tabla plans
+Esta tabla define los planes de hosting disponibles en la plataforma.
+Cada plan determina:
+* precio
+* espacio máximo de almacenamiento
+Campos principales:
+* id → identificador del plan
+* name → nombre del plan
+* price → precio
+* max_disk_mb → espacio máximo permitido
+Ejemplo de planes:
+* bajo, 
+* medio, 
+* alto
+________________
+
+
+3.4 Tabla plan_change_requests
+Esta tabla gestiona las solicitudes de cambio o activación de plan realizadas por los usuarios.
+Debido a que el sistema no implementa una pasarela de pagos real, esta tabla simula el proceso de compra de un plan.
+Proceso:
+1. El usuario solicita un plan.
+2. La solicitud queda en estado pending.
+3. Un administrador revisa la solicitud.
+4. Si es aprobada, se activa el plan del usuario.
+Campos principales:
+* user_id → usuario que realiza la solicitud
+* plan_id → plan solicitado
+* status → estado de la solicitud
+* request_reason → motivo de la solicitud
+* reviewed_by → administrador que revisó la solicitud
+* reviewed_at → fecha de revisión
+Estados posibles:
+* pending
+* approved
+* rejected
+________________
+
+
+3.5 Tabla user_plans
+Esta tabla registra los planes activos o históricos de cada usuario.
+Se utiliza para:
+* controlar la vigencia del plan
+* mantener el historial de compras
+Campos principales:
+* user_id → usuario que posee el plan
+* plan_id → plan adquirido
+* purchase_date → fecha de compra
+* expiration_date → fecha de expiración
+* months_purchased → meses adquiridos
+* total_price_paid → precio pagado
+* status → estado del plan
+Estados posibles:
+* active
+* expired
+________________
+
+
+3.6 Tabla deployments
+Esta tabla representa el sitio web que un usuario despliega dentro de la plataforma.
+Cada usuario puede tener un único deployment asociado.
+Campos principales:
+* user_id → propietario del sitio
+* domain → dominio del sitio
+* site_url → URL del sitio
+* disk_used_mb → espacio usado
+* traffic_visit_count → contador de visitas
+* status → estado del deployment
+Estados posibles:
+* active
+* blocked
+* inactive
+________________
+
+
+3.7 Tabla deployment_versions
+Esta tabla almacena las diferentes versiones del sitio web que un usuario ha subido.
+Cada vez que el usuario sube una nueva versión del sitio, se registra una nueva entrada en esta tabla.
+Campos principales:
+* deployment_id → deployment asociado
+* version_number → número de versión
+* zip_filename → nombre del archivo
+* zip_path → ruta del archivo
+* disk_used_mb → espacio utilizado
+* status → estado de la versión
+Estados posibles:
+* active
+* replaced
+________________
+
+
+3.8 Tabla system_logs
+Esta tabla registra eventos y acciones realizadas dentro del sistema.
+Se utiliza principalmente para:
+* auditoría
+* monitoreo
+* diagnóstico de errores
+Campos principales:
+* user_id → usuario que realizó la acción
+* ip_address → dirección IP
+* request_path → ruta solicitada
+* action → acción realizada
+* http_method → método HTTP
+* status_code → código de respuesta
+* user_agent → información del cliente
+________________
+
+
+4. Triggers
+4.1 Trigger: Validación de almacenamiento
+Nombre:
+trg_validate_storage_limit
+Este trigger se ejecuta antes de insertar una nueva versión en la tabla deployment_versions.
+Objetivo:
+Evitar que un usuario supere el espacio de almacenamiento permitido por su plan.
+Funcionamiento:
+1. Se obtiene el plan activo del usuario.
+2. Se consulta el espacio máximo permitido.
+3. Se compara con el espacio de la nueva versión.
+4. Si el espacio excede el límite, se genera un error.
+Esto garantiza que el sistema respete los límites del plan incluso si el backend falla en validar esta condición.
+________________
+
+
+4.2 Trigger: Reemplazo automático de versiones
+Nombre:
+trg_replace_previous_version
+Este trigger se ejecuta antes de insertar una nueva versión.
+Objetivo:
+Asegurar que solo exista una versión activa del sitio web.
+Funcionamiento:
+1. Se identifican versiones activas del mismo deployment.
+2. Se actualiza su estado a replaced.
+3. La nueva versión se inserta como active.
+Esto mantiene el historial de versiones sin permitir múltiples versiones activas simultáneamente.
+________________
+
+
+5. Eventos Programados
+5.1 Evento de expiración de planes
+Nombre:
+event_expire_user_plans
+Frecuencia:
+Se ejecuta una vez al día.
+Función:
+* Detectar planes cuya fecha de expiración ya pasó.
+* Marcar dichos planes como expired.
+* Bloquear el deployment asociado.
+Esto permite automatizar el control de vigencia de los planes.
+________________
+
+
+5.2 Evento de reinicio de tráfico
+Nombre:
+event_monthly_traffic_reset
+Frecuencia:
+Se ejecuta una vez al mes.
+Función:
+Reiniciar el contador de visitas de los deployments.
+Esto permite manejar métricas mensuales de tráfico.
+________________
+
+
+6. Vistas
+6.1 Vista de usuarios con planes activos
+Nombre:
+vw_active_users_with_plan
+Esta vista muestra los usuarios que actualmente tienen un plan activo.
+Se utiliza principalmente para:
+* reportes administrativos
+* monitoreo del sistema
+________________
+
+
+6.2 Vista de uso de almacenamiento
+Nombre:
+vw_storage_usage
+Esta vista permite observar el uso de almacenamiento de cada usuario en relación con el límite de su plan.
+Información incluida:
+* usuario
+* plan
+* espacio utilizado
+* espacio disponible
+Esta vista facilita el análisis del uso de recursos del sistema.
+________________
+
+
+7. Índices
+Se implementaron índices para mejorar el rendimiento de consultas frecuentes.
+Ejemplos:
+* índice único en users.email para evitar duplicados
+* índice en user_plans.user_id para búsquedas rápidas
+* índice en deployment_versions.deployment_id para consultas de versiones
+* índice en system_logs.user_id para auditoría
+Los índices se aplicaron únicamente en campos críticos para evitar un uso excesivo de recursos
