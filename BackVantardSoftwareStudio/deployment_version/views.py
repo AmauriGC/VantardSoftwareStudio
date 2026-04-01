@@ -10,6 +10,8 @@ from user_plans.models import UserPlan
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
+DEPLOYMENT_NOT_FOUND = 'Deployment no encontrado.'
+
 from .models import DeploymentVersion
 from .serializers import DeploymentVersionOutputSerializer
 from .utils import (
@@ -45,7 +47,7 @@ class UploadVersionView(APIView):
     def post(self, request, deployment_id):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         # Verificar plan activo
         active_plan = UserPlan.objects.filter(
@@ -148,7 +150,7 @@ class VersionListView(APIView):
     def get(self, request, deployment_id):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         qs = DeploymentVersion.objects.filter(
             deployment   = deployment,
@@ -182,7 +184,7 @@ class VersionDetailView(APIView):
     def get(self, request, deployment_id, pk):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         try:
             version = DeploymentVersion.objects.get(
@@ -210,7 +212,7 @@ class RollbackVersionView(APIView):
     def put(self, request, deployment_id, pk):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         # Versión a restaurar
         try:

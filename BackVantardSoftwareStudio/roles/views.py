@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdminUser
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
+ROL_NOT_FOUND = 'Rol no encontrado.'
+
 from .models import Role
 from .serializers import RoleOutputSerializer, RoleInputSerializer
 
@@ -58,7 +60,7 @@ class RoleDetailView(APIView):
     def get(self, request, pk):
         role = self._get_role(pk)
         if not role:
-            return error_response(message='Rol no encontrado.', status=404)
+            return error_response(message=ROL_NOT_FOUND, status=404)
 
         log_request(request, 'ADMIN_GET_ROLE', 200)
         return success_response(
@@ -69,7 +71,7 @@ class RoleDetailView(APIView):
     def put(self, request, pk):
         role = self._get_role(pk)
         if not role:
-            return error_response(message='Rol no encontrado.', status=404)
+            return error_response(message=ROL_NOT_FOUND, status=404)
 
         serializer = RoleInputSerializer(
             data=request.data,
@@ -95,7 +97,7 @@ class RoleDetailView(APIView):
     def delete(self, request, pk):
         role = self._get_role(pk)
         if not role:
-            return error_response(message='Rol no encontrado.', status=404)
+            return error_response(message=ROL_NOT_FOUND, status=404)
 
           # Bloquear si hay usuarios con este rol asignado
         if role.users.filter(deleted_at__isnull=True).exists():

@@ -1,4 +1,6 @@
 # plan_change_requests/utils.py
+SOLICITUD_NOT_FOUND = 'Solicitud no encontrada.'
+
 from django.utils import timezone
 from django.db import transaction
 from .models import PlanChangeRequest
@@ -71,7 +73,7 @@ def approve_plan_change_request(request_id, reviewed_by):
     try:
         request_obj = PlanChangeRequest.objects.get(id=request_id)
     except PlanChangeRequest.DoesNotExist:
-        raise ValueError('Solicitud no encontrada.')
+        raise ValueError(SOLICITUD_NOT_FOUND)
     
     if request_obj.status != PlanChangeRequest.Status.PENDING:
         raise ValueError('Solo se pueden aprobar solicitudes pendientes.')
@@ -100,7 +102,7 @@ def reject_plan_change_request(request_id, reviewed_by):
     try:
         request_obj = PlanChangeRequest.objects.get(id=request_id)
     except PlanChangeRequest.DoesNotExist:
-        raise ValueError('Solicitud no encontrada.')
+        raise ValueError(SOLICITUD_NOT_FOUND)
     
     if request_obj.status != PlanChangeRequest.Status.PENDING:
         raise ValueError('Solo se pueden rechazar solicitudes pendientes.')
@@ -137,7 +139,7 @@ def complete_plan_change(request_id):
             'user', 'current_plan', 'requested_plan'
         ).get(id=request_id)
     except PlanChangeRequest.DoesNotExist:
-        raise ValueError('Solicitud no encontrada.')
+        raise ValueError(SOLICITUD_NOT_FOUND)
     
     if request_obj.status != PlanChangeRequest.Status.APPROVED:
         raise ValueError('Solo se pueden completar solicitudes aprobadas.')
@@ -191,7 +193,7 @@ def cancel_plan_change_request(request_id):
     try:
         request_obj = PlanChangeRequest.objects.get(id=request_id)
     except PlanChangeRequest.DoesNotExist:
-        raise ValueError('Solicitud no encontrada.')
+        raise ValueError(SOLICITUD_NOT_FOUND)
     
     if request_obj.status == PlanChangeRequest.Status.COMPLETED:
         raise ValueError('No se puede cancelar una solicitud ya completada.')
