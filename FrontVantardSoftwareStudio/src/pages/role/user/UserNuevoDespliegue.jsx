@@ -6,6 +6,7 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import { usuarioActual, planes } from "../../../data/mockData";
 import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import DeploymentService from "./service/DeploymentService";
 
 export default function UserNuevoDespliegue() {
   const navigate = useNavigate();
@@ -42,6 +43,10 @@ export default function UserNuevoDespliegue() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    const normalizedDomain = dominio.trim().toLowerCase();
+
     if (!dominio.trim()) {
       showErrorAlert({ title: "Falta el dominio", text: "Ingresa un nombre para tu sitio." });
       return;
@@ -50,12 +55,61 @@ export default function UserNuevoDespliegue() {
       showErrorAlert({ title: "Falta el archivo", text: "Selecciona un archivo .zip con tu sitio." });
       return;
     }
+
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1200));
+
+    const myDeploymentsResult = await DeploymentService.listMyDeployments();
+    if (!myDeploymentsResult.ok) {
+      showErrorAlert({
+        title: "No se pudo validar tu despliegue",
+        text: myDeploymentsResult.message || "Intenta nuevamente.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const existingDeployment = myDeploymentsResult.data.find(
+      (item) => String(item?.domain ?? "").toLowerCase() === normalizedDomain
+    );
+
+    let deploymentId = existingDeployment?.id ?? null;
+    let createdNewDeployment = false;
+
+    if (!deploymentId) {
+      const createResult = await DeploymentService.createDeployment({ domain: normalizedDomain });
+      if (!createResult.ok) {
+        showErrorAlert({
+          title: "No se pudo crear el despliegue",
+          text: createResult.message || "Intenta nuevamente.",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      deploymentId = createResult.data?.id ?? null;
+      createdNewDeployment = true;
+    }
+
+    const uploadResult = await DeploymentService.uploadVersion({
+      deploymentId,
+      zipFile: archivo,
+    });
+
+    if (!uploadResult.ok) {
+      showErrorAlert({
+        title: "No se pudo subir la version",
+        text: uploadResult.message || "Intenta nuevamente.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const versionNumber = uploadResult.data?.version_number;
+    const versionText = versionNumber ? `Version ${versionNumber} publicada.` : "Version publicada.";
+
     setIsSubmitting(false);
     await showSuccessAlert({
-      title: "¡Despliegue creado!",
-      text: `Tu sitio "${dominio}.vss.app" fue desplegado correctamente.`,
+      title: createdNewDeployment ? "Despliegue creado" : "Version actualizada",
+      text: `Tu sitio "${normalizedDomain}.vss.app" fue procesado correctamente. ${versionText}`,
     });
     navigate("/user/despliegue");
   };
@@ -110,6 +164,9 @@ export default function UserNuevoDespliegue() {
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Solo letras minúsculas, números y guiones.
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Si el dominio ya existe, se sube una nueva version al mismo despliegue.
               </p>
             </div>
           </div>

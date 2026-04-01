@@ -1,17 +1,13 @@
 import { Rocket, HardDrive, Activity, CreditCard } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import StatCard from "../../../components/StatCard";
 import { formatearFecha } from "../../../utils/formatters";
-import {
-  usuarioActual,
-  despliegues,
-  actividad,
-  logsAcceso,
-  planes,
-} from "../../../data/mockData";
+import UserService from "./service/UserService";
+import DeploymentService from "./service/DeploymentService";
 
 function getColorBarra(pct) {
   if (pct >= 90) return "bg-red-500";
@@ -21,19 +17,65 @@ function getColorBarra(pct) {
 
 export default function UserDashboard() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState(null);
+  const [misDespliegues, setMisDespliegues] = useState([]);
+  const [misLogs, setMisLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const misDespliegues = despliegues.filter((d) => d.usuarioId === usuarioActual.id);
-  const miActividad = actividad.filter((a) => a.usuarioId === usuarioActual.id);
-  const misLogs = logsAcceso.filter((l) =>
-    misDespliegues.some((d) => d.id === l.despliegueId)
-  );
+  useEffect(() => {
+    const cargarDatos = async () => {
+      try {
+        // Obtener perfil del usuario
+        const resultProfile = await UserService.getProfile();
+        if (resultProfile.ok) {
+          setProfile(resultProfile.data);
+        }
 
-  const planActual = planes.find((p) => p.nombre === usuarioActual.plan) || planes[0];
-  const discoPercent =
-    planActual.discoMaxMB > 0
-      ? Math.round((usuarioActual.usoDiscoMB / planActual.discoMaxMB) * 100)
-      : 0;
-  const traficoTotal = misDespliegues.reduce((acc, d) => acc + d.trafico, 0);
+        // Obtener lista de despliegues
+        const resultDeploy = await DeploymentService.listMyDeployments();
+        if (resultDeploy.ok) {
+          setMisDespliegues(resultDeploy.data);
+
+          // Obtener logs de todos los despliegues
+          const allLogs = [];
+          for (const deployment of resultDeploy.data) {
+            const resultLogs = await DeploymentService.getLogs(deployment.id);
+            if (resultLogs.ok) {
+              allLogs.push(...resultLogs.data);
+            }
+          }
+          setMisLogs(allLogs);
+        }
+      } catch (error) {
+        console.error("Error cargando dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDatos();
+  }, []);
+
+  if (loading || !profile) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Cargando tu información...</p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando dashboard...</p>
+        </BaseCard>
+      </div>
+    );
+  }
+
+  // Calcular estadísticas
+  const discoPercent = profile.plan_max_disk_mb > 0
+    ? Math.round((profile.used_disk_mb / profile.plan_max_disk_mb) * 100)
+    : 0;
+  const traficoTotal = misDespliegues.reduce((acc, d) => acc + (d.traffic_count || 0), 0);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -42,7 +84,7 @@ export default function UserDashboard() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Bienvenido de vuelta, {usuarioActual.nombre}
+            Bienvenido de vuelta, {profile.first_name || profile.nombre || "Usuario"}
           </p>
         </div>
         <BaseButton onClick={() => navigate("/user/nuevo-despliegue")}>
@@ -55,14 +97,14 @@ export default function UserDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
           title="Plan actual"
-          value={usuarioActual.plan}
-          description={`Hasta ${planActual.cargaMaxMB} MB por carga`}
+          value={profile.plan_name || profile.plan || "Gratis"}
+          description={`Hasta ${profile.plan_max_upload_mb || 0} MB por carga`}
           icon={<CreditCard className="h-4 w-4" />}
         />
         <StatCard
           title="Disco usado"
-          value={`${usuarioActual.usoDiscoMB} MB`}
-          description={`${discoPercent}% de ${planActual.discoMaxMB} MB`}
+          value={`${profile.used_disk_mb || 0} MB`}
+          description={`${discoPercent}% de ${profile.plan_max_disk_mb || 0} MB`}
           icon={<HardDrive className="h-4 w-4" />}
         />
         <StatCard
@@ -83,8 +125,8 @@ export default function UserDashboard() {
           />
         </div>
         <div className="flex justify-between text-xs text-gray-500 mt-2 mb-4">
-          <span>{usuarioActual.usoDiscoMB} MB usados</span>
-          <span>{planActual.discoMaxMB} MB totales</span>
+          <span>{profile.used_disk_mb || 0} MB usados</span>
+          <span>{profile.plan_max_disk_mb || 0} MB totales</span>
         </div>
         <div className="flex flex-col gap-2">
           {misDespliegues.map((d) => (
@@ -94,9 +136,9 @@ export default function UserDashboard() {
                 onClick={() => navigate("/user/despliegue")}
                 className="text-blue-600 hover:text-blue-700 font-mono text-xs hover:underline"
               >
-                {d.dominio}
+                {d.domain || d.dominio}
               </button>
-              <span className="text-gray-500">{d.usoDiscoMB} MB</span>
+              <span className="text-gray-500">{d.used_disk_mb || d.usoDiscoMB || 0} MB</span>
             </div>
           ))}
           {misDespliegues.length === 0 && (
@@ -111,21 +153,7 @@ export default function UserDashboard() {
         <BaseCard className="p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-4">Actividad reciente</h2>
           <div className="flex flex-col gap-3">
-            {miActividad.slice(0, 5).map((a) => (
-              <div key={a.id} className="flex items-start gap-3">
-                <div className="mt-1.5 h-2 w-2 rounded-full bg-blue-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">
-                    <span className="font-medium">{a.accion}</span>{" "}
-                    <span className="text-gray-500">{a.objetivo}</span>
-                  </p>
-                  <p className="text-xs text-gray-400">{formatearFecha(a.fecha)}</p>
-                </div>
-              </div>
-            ))}
-            {miActividad.length === 0 && (
-              <p className="text-xs text-gray-400">Sin actividad registrada.</p>
-            )}
+            <p className="text-xs text-gray-400">Actividad de despliegues</p>
           </div>
         </BaseCard>
 
@@ -155,10 +183,10 @@ export default function UserDashboard() {
                     key={l.id}
                     className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
                   >
-                    <td className="py-2.5 px-5 font-mono text-xs text-gray-700">{l.ruta}</td>
-                    <td className="py-2.5 px-5 font-mono text-xs text-gray-500">{l.ip}</td>
+                    <td className="py-2.5 px-5 font-mono text-xs text-gray-700">{l.ruta || l.path}</td>
+                    <td className="py-2.5 px-5 font-mono text-xs text-gray-500">{l.ip || l.client_ip}</td>
                     <td className="py-2.5 px-5 text-right text-xs text-gray-400">
-                      {formatearFecha(l.fecha)}
+                      {formatearFecha(l.fecha || l.created_at)}
                     </td>
                   </tr>
                 ))

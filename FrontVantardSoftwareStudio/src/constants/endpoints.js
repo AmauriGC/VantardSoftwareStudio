@@ -15,4 +15,15 @@ export const ENDPOINTS = {
     list: "/api/users/",
     updateStatus: (id) => `/api/users/${id}/status/`,
   },
+  deployments: {
+    list: "/api/deployments/",
+    detail: (id) => `/api/deployments/${id}/`,
+  },
+  deploymentVersions: {
+    upload: (deploymentId) => `/api/deployment-versions/${deploymentId}/upload/`,
+    list: (deploymentId) => `/api/deployment-versions/${deploymentId}/`,
+    detail: (deploymentId, versionId) => `/api/deployment-versions/${deploymentId}/${versionId}/`,
+    rollback: (deploymentId, versionId) =>
+      `/api/deployment-versions/${deploymentId}/${versionId}/rollback/`,
+  },
 };
