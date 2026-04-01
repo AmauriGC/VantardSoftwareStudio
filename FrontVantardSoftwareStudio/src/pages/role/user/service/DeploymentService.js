@@ -78,4 +78,28 @@ export default class DeploymentService {
       return { ok: false, message: normalized.message };
     }
   }
+
+  static async getTraffic(days = 7) {
+    try {
+      const response = await axiosClient.get("/api/deployments/traffic/", {
+        params: { days },
+      });
+      const payload = response?.data?.data ?? {};
+      return { ok: true, data: payload.traffic ?? [] };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async getTrafficSummary() {
+    try {
+      const response = await axiosClient.get("/api/deployments/traffic/summary/");
+      const payload = response?.data?.data ?? {};
+      return { ok: true, data: payload };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
 }

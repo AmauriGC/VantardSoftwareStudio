@@ -48,4 +48,37 @@ export default class UserService {
       return { ok: false, message: normalized.message };
     }
   }
+
+  static async listPlans() {
+    try {
+      const response = await axiosClient.get("/api/plans/");
+      return { ok: true, data: response?.data?.data ?? [] };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async getPlanRequests() {
+    try {
+      const response = await axiosClient.get("/api/plan-requests/");
+      return { ok: true, data: response?.data?.data ?? [] };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async requestPlanChange({ plan_id, months }) {
+    try {
+      const response = await axiosClient.post("/api/plan-requests/", {
+        plan_id,
+        months,
+      });
+      return { ok: true, data: response?.data?.data ?? null };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
 }

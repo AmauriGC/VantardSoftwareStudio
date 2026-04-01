@@ -1,21 +1,56 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, CreditCard, HardDrive, UploadCloud } from "lucide-react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseModal from "../../../components/BaseModal";
 import BaseInput from "../../../components/BaseInput";
-import { usuarioActual, planes, solicitudesPlan } from "../../../data/mockData";
-import { showSuccessAlert } from "../../../kernel/alerts";
+import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import UserService from "./service/UserService";
 
 export default function UserPlan() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [planSeleccionado, setPlanSeleccionado] = useState(null);
   const [meses, setMeses] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [planes, setPlanes] = useState([]);
+  const [misSolicitudes, setMisSolicitudes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const planActual = planes.find((p) => p.nombre === usuarioActual.plan) || planes[0];
-  const misSolicitudes = solicitudesPlan.filter((s) => s.usuarioId === usuarioActual.id);
+  useEffect(() => {
+    const cargarDatos = async () => {
+      try {
+        // Obtener perfil
+        const resultProfile = await UserService.getProfile();
+        if (resultProfile.ok) {
+          setProfile(resultProfile.data);
+        }
+
+        // Obtener planes disponibles
+        const resultPlanes = await UserService.listPlans();
+        if (resultPlanes.ok) {
+          setPlanes(resultPlanes.data);
+        }
+
+        // Obtener solicitudes de cambio de plan
+        const resultRequests = await UserService.getPlanRequests();
+        if (resultRequests.ok) {
+          setMisSolicitudes(resultRequests.data);
+        }
+      } catch (error) {
+        console.error("Error cargando datos de plan:", error);
+        showErrorAlert({
+          title: "Error",
+          text: "No se pudieron cargar los datos del plan",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDatos();
+  }, []);
 
   const abrirModal = (plan) => {
     setPlanSeleccionado(plan);
@@ -24,19 +59,46 @@ export default function UserPlan() {
   };
 
   const handleSolicitar = async () => {
+    if (!planSeleccionado || !meses) return;
+    
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 700));
-    setIsSubmitting(false);
-    setModalAbierto(false);
-    showSuccessAlert({
-      title: "Solicitud enviada",
-      text: `Tu solicitud para el plan ${planSeleccionado?.nombre} fue enviada. El administrador la revisará pronto.`,
-    });
+    try {
+      const result = await UserService.requestPlanChange({
+        plan_id: planSeleccionado.id,
+        months: parseInt(meses, 10),
+      });
+
+      if (result.ok) {
+        setModalAbierto(false);
+        // Recargar solicitudes
+        const resultRequests = await UserService.getPlanRequests();
+        if (resultRequests.ok) {
+          setMisSolicitudes(resultRequests.data);
+        }
+        showSuccessAlert({
+          title: "Solicitud enviada",
+          text: `Tu solicitud para el plan ${planSeleccionado?.name || planSeleccionado?.nombre} fue enviada. El administrador la revisará pronto.`,
+        });
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: result.message || "No se pudo enviar la solicitud",
+        });
+      }
+    } catch (error) {
+      console.error("Error enviando solicitud:", error);
+      showErrorAlert({
+        title: "Error",
+        text: "No se pudo enviar la solicitud",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const totalEstimado =
     planSeleccionado && meses
-      ? planSeleccionado.precio * Number.parseInt(meses || "1", 10)
+      ? (planSeleccionado.price || planSeleccionado.precio) * Number.parseInt(meses || "1", 10)
       : 0;
 
   const ESTADO_CLASES = {
@@ -44,6 +106,24 @@ export default function UserPlan() {
     Aprobado: "bg-green-50 text-green-700",
     Rechazado: "bg-red-50 text-red-700",
   };
+
+  // Encontrar el plan actual del usuario
+  const planActual = planes.find((p) => p.id === profile?.plan_id || p.name === profile?.plan_name) || planes[0];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Mi plan</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Cargando tu información...</p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando datos del plan...</p>
+        </BaseCard>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -69,15 +149,15 @@ export default function UserPlan() {
 
         <div className="flex items-center justify-between p-4 rounded-xl bg-blue-50 border border-blue-100 mb-5">
           <div>
-            <p className="text-lg font-bold text-blue-900">{planActual.nombre}</p>
+            <p className="text-lg font-bold text-blue-900">{planActual?.name || planActual?.nombre || "Plan"}</p>
             <p className="text-sm text-blue-700">
-              {planActual.precio === 0
+              {(planActual?.price || planActual?.precio) === 0
                 ? "Gratuito"
-                : `$${planActual.precio} / mes`}
+                : `$${planActual?.price || planActual?.precio} / mes`}
             </p>
           </div>
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            {usuarioActual.estadoPlan}
+            {profile?.plan_status || "Activo"}
           </span>
         </div>
 
@@ -86,14 +166,14 @@ export default function UserPlan() {
             <HardDrive className="h-4 w-4 text-gray-400 shrink-0" />
             <div>
               <p className="text-xs text-gray-500">Disco máximo</p>
-              <p className="font-medium text-gray-900">{planActual.discoMaxMB} MB</p>
+              <p className="font-medium text-gray-900">{planActual?.max_disk_mb || planActual?.discoMaxMB || 0} MB</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <UploadCloud className="h-4 w-4 text-gray-400 shrink-0" />
             <div>
               <p className="text-xs text-gray-500">Carga máxima</p>
-              <p className="font-medium text-gray-900">{planActual.cargaMaxMB} MB</p>
+              <p className="font-medium text-gray-900">{planActual?.max_upload_mb || planActual?.cargaMaxMB || 0} MB</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -113,7 +193,7 @@ export default function UserPlan() {
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Planes disponibles</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {planes.map((p) => {
-            const esActual = p.nombre === planActual.nombre;
+            const esActual = p.id === planActual?.id || p.name === planActual?.name;
             return (
               <BaseCard
                 key={p.id}
@@ -123,7 +203,7 @@ export default function UserPlan() {
               >
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-base font-semibold text-gray-900">{p.nombre}</h3>
+                    <h3 className="text-base font-semibold text-gray-900">{p.name || p.nombre}</h3>
                     {esActual && (
                       <span className="text-[10px] font-medium bg-blue-600 text-white px-1.5 py-0.5 rounded">
                         Actual
@@ -131,18 +211,18 @@ export default function UserPlan() {
                     )}
                   </div>
                   <p className="text-xl font-bold text-gray-900">
-                    {p.precio === 0 ? "Gratis" : `$${p.precio}/mes`}
+                    {(p.price || p.precio) === 0 ? "Gratis" : `$${p.price || p.precio}/mes`}
                   </p>
                 </div>
 
                 <ul className="flex flex-col gap-2 text-sm flex-1">
                   <li className="flex items-center gap-2 text-gray-600">
                     <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                    {p.discoMaxMB} MB de almacenamiento
+                    {p.max_disk_mb || p.discoMaxMB} MB de almacenamiento
                   </li>
                   <li className="flex items-center gap-2 text-gray-600">
                     <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                    Carga hasta {p.cargaMaxMB} MB
+                    Carga hasta {p.max_upload_mb || p.cargaMaxMB} MB
                   </li>
                   <li className="flex items-center gap-2 text-gray-600">
                     <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
