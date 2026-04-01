@@ -1,12 +1,13 @@
 import { Globe, HardDrive, Activity, UploadCloud, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseTable from "../../../components/BaseTable";
 import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
-import { usuarioActual, despliegues, logsAcceso } from "../../../data/mockData";
+import DeploymentService from "./service/DeploymentService";
 
 const logColumns = [
   { key: "ruta", header: "Ruta" },
@@ -34,11 +35,52 @@ const ESTADO_CLASES = {
 
 export default function UserDespliegue() {
   const navigate = useNavigate();
+  const [miDespliegue, setMiDespliegue] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const miDespliegue = despliegues.find((d) => d.usuarioId === usuarioActual.id);
-  const logs = miDespliegue
-    ? logsAcceso.filter((l) => l.despliegueId === miDespliegue.id)
-    : [];
+  useEffect(() => {
+    const cargarDatos = async () => {
+      try {
+        // Obtener la lista de despliegues del usuario
+        const resultDeploy = await DeploymentService.listMyDeployments();
+        if (resultDeploy.ok && resultDeploy.data.length > 0) {
+          const primero = resultDeploy.data[0];
+          // Obtener el detalle completo del primer despliegue
+          const resultDetail = await DeploymentService.getDeployment(primero.id);
+          if (resultDetail.ok) {
+            setMiDespliegue(resultDetail.data);
+            // Obtener los logs del despliegue
+            const resultLogs = await DeploymentService.getLogs(primero.id);
+            if (resultLogs.ok) {
+              setLogs(resultLogs.data);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error cargando despliegue:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDatos();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Mi despliegue</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gestión de tu sitio web estático</p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando despliegue...</p>
+        </BaseCard>
+      </div>
+    );
+  }
 
   if (!miDespliegue) {
     return (
