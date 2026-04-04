@@ -36,7 +36,7 @@ def cancel_active_plans(user_id: int) -> int:
     count = plans.count()
 
     plans.update(
-        status=UserPlan.Status.CANCELLED,
+        status=UserPlan.Status.EXPIRED,
         deleted_at=timezone.now(),
         updated_at=timezone.now()
     )

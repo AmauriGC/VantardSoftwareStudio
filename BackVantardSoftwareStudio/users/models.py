@@ -5,9 +5,8 @@ from .managers import UserManager
 class User(AbstractBaseUser, PermissionsMixin):
 
     class Status(models.TextChoices):
-        ACTIVE   = 'active',   'Active'
-        INACTIVE = 'inactive', 'Inactive'
-        BANNED   = 'banned',   'Banned'
+        ACTIVE  = 'active',  'Active'
+        BLOCKED = 'blocked', 'Blocked'
 
     first_name = models.CharField(
         max_length=100,
@@ -91,7 +90,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status     = self.Status.INACTIVE
+        self.status     = self.Status.BLOCKED
         self.is_active  = False
         self.save(update_fields=['deleted_at', 'status', 'is_active', 'updated_at'])
         

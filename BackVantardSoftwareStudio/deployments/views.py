@@ -169,7 +169,7 @@ class DeploymentDetailView(APIView):
         deployment.versions.filter(
             status=DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         deployment.soft_delete()
         log_request(request, 'USER_DELETE_DEPLOYMENT', 200)

@@ -4,10 +4,8 @@ from django.conf import settings
 class UserPlan(models.Model):
 
     class Status(models.TextChoices):
-        ACTIVE    = 'active',    'Active'
-        EXPIRED   = 'expired',   'Expired'
-        CANCELLED = 'cancelled', 'Cancelled'
-        PENDING   = 'pending',   'Pending'
+        ACTIVE  = 'active',  'Active'
+        EXPIRED = 'expired', 'Expired'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -99,7 +97,7 @@ class UserPlan(models.Model):
 
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status     = self.Status.CANCELLED
+        self.status     = self.Status.EXPIRED
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])
 
     @classmethod
