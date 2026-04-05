@@ -29,6 +29,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
 )
 from .permissions import IsAdminUser
+from roles.models import Role
 from plans.models import Plan
 from user_plans.models import UserPlan
 from system_logs.utils import log_request
@@ -67,6 +68,14 @@ class RegisterView(APIView):
                 status=500,
             )
 
+        default_role = Role.objects.filter(role_name__iexact='user').first()
+        if not default_role:
+            log_request(request, 'USER_REGISTER_FAILED', 500)
+            return error_response(
+                message='No existe el rol User configurado. Contacta al administrador.',
+                status=500,
+            )
+
         data = serializer.validated_data
         now = timezone.now()
 
@@ -76,6 +85,7 @@ class RegisterView(APIView):
                 password=data['password'],
                 first_name=data['first_name'],
                 last_name=data['last_name'],
+                role=default_role,
             )
 
             UserPlan.objects.create(
