@@ -94,7 +94,7 @@ class LoginView(APIView):
                 status=401,
             )
 
-        if not user.is_active or user.status == User.Status.BANNED:
+        if not user.is_active or user.status == User.Status.BLOCKED:
             log_request(request, 'USER_LOGIN_BLOCKED', 403, user_id=user.pk)
             return error_response(
                 message='Tu cuenta está suspendida o bloqueada.',

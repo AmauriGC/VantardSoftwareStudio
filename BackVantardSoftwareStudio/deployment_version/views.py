@@ -109,12 +109,12 @@ class UploadVersionView(APIView):
                 status=500,
             )
 
-        # Archivar versión activa anterior
+        # Marcar como reemplazada la versión activa anterior
         DeploymentVersion.objects.filter(
             deployment   = deployment,
             status       = DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         # Crear nueva versión
         disk_used_mb = max(round(zip_info['total_uncompressed_mb']), 1)
@@ -230,9 +230,9 @@ class RollbackVersionView(APIView):
                 status=400,
             )
 
-        if target_version.status != DeploymentVersion.Status.ARCHIVED:
+        if target_version.status != DeploymentVersion.Status.REPLACED:
             return error_response(
-                message='Solo se puede hacer rollback a versiones archivadas.',
+                message='Solo se puede hacer rollback a versiones reemplazadas.',
                 status=400,
             )
 
@@ -247,12 +247,12 @@ class RollbackVersionView(APIView):
                 status=500,
             )
 
-        # Archivar la versión activa actual
+        # Marcar como reemplazada la versión activa actual
         DeploymentVersion.objects.filter(
             deployment   = deployment,
             status       = DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         # Re-extraer el ZIP de la versión objetivo al directorio del sitio
         try:

@@ -39,6 +39,10 @@ db.sqlite3-journal
 staticfiles/
 media/
 
+# Migraciones (ignorar archivos generados, pero mantener el paquete)
+BackVantardSoftwareStudio/**/migrations/*.py
+!BackVantardSoftwareStudio/**/migrations/__init__.py
+
 # --- Node / Vite ---
 node_modules/
 dist/
@@ -46,6 +50,9 @@ dist-ssr/
 build/
 .vite/
 *.local
+
+# Lockfile (evitar cambios ruidosos si no se versiona)
+package-lock.json
 
 # --- Logs ---
 logs/

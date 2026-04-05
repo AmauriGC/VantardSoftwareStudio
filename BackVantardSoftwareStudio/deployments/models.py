@@ -5,9 +5,8 @@ class Deployment(models.Model):
 
     class Status(models.TextChoices):
         ACTIVE   = 'active',   'Active'
+        BLOCKED  = 'blocked',  'Blocked'
         INACTIVE = 'inactive', 'Inactive'
-        FAILED   = 'failed',   'Failed'
-        ARCHIVED = 'archived', 'Archived'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -69,5 +68,5 @@ class Deployment(models.Model):
     def soft_delete(self):
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status = self.Status.ARCHIVED
+        self.status = self.Status.INACTIVE
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])

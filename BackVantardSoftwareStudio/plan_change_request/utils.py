@@ -147,9 +147,9 @@ def complete_plan_change(request_id):
     if request_obj.is_deleted:
         raise ValueError('No se puede completar una solicitud eliminada.')
     
-    # Cancelar el plan actual
+    # Marcar el plan actual como no vigente
     current_plan = request_obj.current_plan
-    current_plan.status = UserPlan.Status.CANCELLED
+    current_plan.status = UserPlan.Status.EXPIRED
     current_plan.save(update_fields=['status', 'updated_at'])
     
     # Crear nuevo UserPlan con el plan solicitado
