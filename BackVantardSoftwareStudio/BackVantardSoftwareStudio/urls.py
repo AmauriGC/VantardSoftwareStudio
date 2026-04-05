@@ -1,10 +1,13 @@
 from django.urls import path, include
 from core import views as core
 from django.contrib import admin
+from deployments.views import serve_site_file
 
 urlpatterns = [
     path("", core.home, name="home"),
     path('admin/', admin.site.urls),
+    path('sites/<str:domain>/', serve_site_file, name='site-index'),
+    path('sites/<str:domain>/<path:file_path>', serve_site_file, name='site-file'),
 
     # --- System Logs ---
     path('api/system-logs/', include('system_logs.urls')),

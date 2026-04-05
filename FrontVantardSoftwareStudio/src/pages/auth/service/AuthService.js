@@ -134,4 +134,60 @@ export default class AuthService {
       return { ok: false, message: normalized.message };
     }
   }
+
+  static async requestPasswordReset({ email }) {
+    const normalizedEmail = String(email ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedEmail) {
+      return { ok: false, message: "El correo es obligatorio." };
+    }
+
+    try {
+      const response = await axiosClient.post(ENDPOINTS.auth.passwordResetRequest, {
+        email: normalizedEmail,
+      });
+      return {
+        ok: true,
+        message:
+          response?.data?.message ??
+          "Si el correo existe, se enviará un enlace para restablecer la contraseña.",
+      };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async confirmPasswordReset({ uid, token, newPassword, confirmPassword }) {
+    const normalizedUid = String(uid ?? "").trim();
+    const normalizedToken = String(token ?? "").trim();
+    const normalizedNewPassword = String(newPassword ?? "").trim();
+    const normalizedConfirmPassword = String(confirmPassword ?? "").trim();
+
+    if (!normalizedUid || !normalizedToken) {
+      return { ok: false, message: "El enlace de recuperación es inválido." };
+    }
+
+    if (!normalizedNewPassword || !normalizedConfirmPassword) {
+      return { ok: false, message: "Debes capturar y confirmar la nueva contraseña." };
+    }
+
+    try {
+      const response = await axiosClient.post(ENDPOINTS.auth.passwordResetConfirm, {
+        uid: normalizedUid,
+        token: normalizedToken,
+        new_password: normalizedNewPassword,
+        confirm_password: normalizedConfirmPassword,
+      });
+      return {
+        ok: true,
+        message: response?.data?.message ?? "Contraseña restablecida correctamente.",
+      };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
 }

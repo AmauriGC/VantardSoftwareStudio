@@ -22,6 +22,28 @@ from .utils import (
 )
 
 
+def _resolve_max_upload_mb(plan):
+    explicit = getattr(plan, 'max_upload_mb', None)
+    if explicit is not None:
+        return explicit
+
+    by_name = {
+        'gratis': 5,
+        'free': 5,
+        'basico': 5,
+        'básico': 5,
+        'medio': 10,
+        'pro': 10,
+        'premium': 20,
+        'completo': 20,
+    }
+    plan_name = str(getattr(plan, 'name', '')).strip().lower()
+    if plan_name in by_name:
+        return by_name[plan_name]
+
+    return min(getattr(plan, 'max_disk_mb', 10), 10)
+
+
 # ---------------------------------------------------------------------------
 # Helper: obtener deployment verificando que pertenece al usuario
 # ---------------------------------------------------------------------------
@@ -68,6 +90,15 @@ class UploadVersionView(APIView):
         if not zip_file:
             return error_response(
                 message='Debes enviar el archivo ZIP en el campo "zip_file".',
+                status=400,
+            )
+
+        # Límite de subida por plan (seguridad: se valida en backend, no en cliente).
+        max_upload_mb = _resolve_max_upload_mb(active_plan.plan)
+        if zip_file.size > (max_upload_mb * 1024 * 1024):
+            log_request(request, 'UPLOAD_VERSION_FAILED', 400)
+            return error_response(
+                message=f'El archivo excede el límite por carga de tu plan ({max_upload_mb} MB).',
                 status=400,
             )
 

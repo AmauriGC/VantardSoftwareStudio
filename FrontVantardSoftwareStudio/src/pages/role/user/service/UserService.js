@@ -52,7 +52,13 @@ export default class UserService {
   static async listPlans() {
     try {
       const response = await axiosClient.get("/api/plans/");
-      return { ok: true, data: response?.data?.data ?? [] };
+      const payload = response?.data?.data ?? response?.data ?? [];
+      const plans = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.plans)
+          ? payload.plans
+          : [];
+      return { ok: true, data: plans };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
       return { ok: false, message: normalized.message };
@@ -61,8 +67,35 @@ export default class UserService {
 
   static async getPlanRequests() {
     try {
-      const response = await axiosClient.get("/api/plan-requests/");
-      return { ok: true, data: response?.data?.data ?? [] };
+      const response = await axiosClient.get("/api/plan-change-requests/my/");
+      const payload = response?.data?.data ?? response?.data ?? [];
+      const rawRequests = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.solicitudes)
+          ? payload.solicitudes
+          : Array.isArray(payload?.requests)
+            ? payload.requests
+            : Array.isArray(payload?.plan_requests)
+              ? payload.plan_requests
+              : [];
+
+      const statusMap = {
+        pending: "Pendiente",
+        approved: "Aprobado",
+        rejected: "Rechazado",
+      };
+
+      const requests = rawRequests.map((item) => ({
+        id: item.id,
+        planSolicitado: item.requested_plan_name ?? item.planSolicitado ?? "-",
+        tipo: "Upgrade",
+        meses: item.months ?? item.meses ?? 1,
+        total: item.total_price ?? item.total ?? 0,
+        estado: statusMap[item.status] ?? item.estado ?? "Pendiente",
+        creadoEn: item.created_at ?? item.creadoEn ?? "-",
+      }));
+
+      return { ok: true, data: requests };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
       return { ok: false, message: normalized.message };
@@ -71,9 +104,9 @@ export default class UserService {
 
   static async requestPlanChange({ plan_id, months }) {
     try {
-      const response = await axiosClient.post("/api/plan-requests/", {
-        plan_id,
-        months,
+      const response = await axiosClient.post("/api/plan-change-requests/", {
+        requested_plan_id: plan_id,
+        reason: months ? `Solicitud por ${months} mes(es)` : "Solicitud de cambio de plan",
       });
       return { ok: true, data: response?.data?.data ?? null };
     } catch (error) {
