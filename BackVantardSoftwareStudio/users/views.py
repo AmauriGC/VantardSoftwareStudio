@@ -34,6 +34,8 @@ from user_plans.models import UserPlan
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
+INVALID_DATA_MSG = 'Datos inválidos.'
+
 
 # ---------------------------------------------------------------------------
 # Registro
@@ -47,7 +49,7 @@ class RegisterView(APIView):
         if not serializer.is_valid():
             log_request(request, 'USER_REGISTER_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -114,7 +116,7 @@ class LoginView(APIView):
         if not serializer.is_valid():
             log_request(request, 'USER_LOGIN_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -133,7 +135,7 @@ class LoginView(APIView):
                 status=401,
             )
 
-        if not user.is_active or user.status == User.Status.BANNED:
+        if not user.is_active or user.status == User.Status.BLOCKED:
             log_request(request, 'USER_LOGIN_BLOCKED', 403, user_id=user.pk)
             return error_response(
                 message='Tu cuenta está suspendida o bloqueada.',
@@ -164,7 +166,7 @@ class RefreshTokenView(APIView):
         serializer = TokenRefreshInputSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -174,7 +176,7 @@ class RefreshTokenView(APIView):
             access_token  = str(old_refresh.access_token)
             # ROTATE_REFRESH_TOKENS=True genera uno nuevo y blacklistea el anterior
             new_refresh   = str(old_refresh)
-        except TokenError as e:
+        except TokenError:
             return error_response(
                 message='Token inválido o expirado.',
                 status=401,
@@ -200,7 +202,7 @@ class LogoutView(APIView):
         serializer = UserLogoutSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -238,7 +240,7 @@ class ProfileView(APIView):
         if not serializer.is_valid():
             log_request(request, 'USER_UPDATE_PROFILE_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -267,7 +269,7 @@ class ChangePasswordView(APIView):
         if not serializer.is_valid():
             log_request(request, 'USER_CHANGE_PASSWORD_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -480,7 +482,7 @@ class UserUpdateStatusView(APIView):
         serializer = UserUpdateStatusSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )

@@ -38,13 +38,55 @@ class ZipValidationError(Exception):
   # Validar el ZIP antes de tocarlo
   # ---------------------------------------------------------------------------
 
+def _validate_member(member) -> bool:
+    """
+    Valida seguridad de un archivo individual dentro del ZIP.
+    Raises ZipValidationError si algo falla.
+    Returns True si el archivo es HTML.
+    """
+    filename = member.filename
+
+    # Protección Path Traversal (Zip Slip)
+    if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
+        raise ZipValidationError(
+            f'Ruta inválida detectada: "{filename}". '
+            'El ZIP no puede contener rutas con "..".'
+        )
+
+    # Validar extensión
+    _, ext = os.path.splitext(filename.lower())
+
+    if ext in BLOCKED_EXTENSIONS:
+        raise ZipValidationError(
+            f'El archivo "{filename}" no está permitido. '
+            f'La extensión "{ext}" está bloqueada por seguridad.'
+        )
+
+    if ext and ext not in ALLOWED_EXTENSIONS:
+        raise ZipValidationError(
+            f'Extensión no permitida: "{ext}" en "{filename}". '
+            'Solo se aceptan archivos de sitios estáticos '
+            '(html, css, js, imágenes, fuentes, etc).'
+        )
+
+    # Protección Zip Bomb por archivo
+    compressed = member.compress_size if member.compress_size > 0 else 1
+    if member.file_size / compressed > ZIP_BOMB_RATIO:
+        raise ZipValidationError(
+            f'El archivo "{filename}" tiene una ratio de compresión '
+            'sospechosamente alta. Posible ZIP bomb.'
+        )
+
+    return ext in ('.html', '.htm')
+
+
 def validate_zip(zip_file, max_disk_mb: int) -> dict:
     """
     Valida seguridad y contenido del ZIP.
     Raises ZipValidationError si algo falla.
     Returns dict con total_uncompressed_mb y file_count.
     """
-      # 1. Verificar que no esté corrupto
+    # 1. Verificar que no esté corrupto
     zip_file.seek(0)
     if not zipfile.is_zipfile(zip_file):
         raise ZipValidationError('El archivo no es un ZIP válido o está corrupto.')
@@ -54,11 +96,11 @@ def validate_zip(zip_file, max_disk_mb: int) -> dict:
     with zipfile.ZipFile(zip_file, 'r') as zf:
         members = zf.infolist()
 
-          # 2. No puede estar vacío
+        # 2. No puede estar vacío
         if not members:
             raise ZipValidationError('El archivo ZIP está vacío.')
 
-          # 3. Límite de cantidad de archivos (protección DoS)
+        # 3. Límite de cantidad de archivos (protección DoS)
         files_only = [m for m in members if not m.is_dir()]
         if len(files_only) > MAX_FILES:
             raise ZipValidationError(
@@ -70,45 +112,10 @@ def validate_zip(zip_file, max_disk_mb: int) -> dict:
         has_html = False
 
         for member in files_only:
-            filename = member.filename
-
-              # 4. Protección Path Traversal (Zip Slip)
-            if '..' in filename or filename.startswith('/') or filename.startswith('\\'):
-                raise ZipValidationError(
-                    f'Ruta inválida detectada: "{filename}". '
-                    'El ZIP no puede contener rutas con "..".'
-                )
-
-              # 5. Validar extensión
-            _, ext = os.path.splitext(filename.lower())
-
-            if ext in BLOCKED_EXTENSIONS:
-                  raise ZipValidationError(
-                    f'El archivo "{filename}" no está permitido. '
-                    f'La extensión "{ext}" está bloqueada por seguridad.'
-                )
-
-            if ext and ext not in ALLOWED_EXTENSIONS:
-                raise ZipValidationError(
-                    f'Extensión no permitida: "{ext}" en "{filename}". '
-                    'Solo se aceptan archivos de sitios estáticos '
-                    '(html, css, js, imágenes, fuentes, etc).'
-                )
-
-            if ext in ('.html', '.htm'):
-                has_html = True
-
-              # 6. Protección Zip Bomb por archivo
-            compressed = member.compress_size if member.compress_size > 0 else 1
-            if member.file_size / compressed > ZIP_BOMB_RATIO:
-                raise ZipValidationError(
-                    f'El archivo "{filename}" tiene una ratio de compresión '
-                    'sospechosamente alta. Posible ZIP bomb.'
-                )
-
+            has_html = _validate_member(member) or has_html
             total_uncompressed += member.file_size
 
-          # 7. Tamaño total vs límite del plan
+        # 4. Tamaño total vs límite del plan
         total_mb = total_uncompressed / (1024 * 1024)
         if total_mb > max_disk_mb:
             raise ZipValidationError(
@@ -116,7 +123,7 @@ def validate_zip(zip_file, max_disk_mb: int) -> dict:
                 f'solo permite {max_disk_mb} MB de almacenamiento.'
             )
 
-          # 8. Debe tener al menos un HTML
+        # 5. Debe tener al menos un HTML
         if not has_html:
             raise ZipValidationError(
                 'El ZIP debe contener al menos un archivo .html. '

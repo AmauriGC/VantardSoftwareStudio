@@ -4,9 +4,8 @@ class DeploymentVersion(models.Model):
 
     class Status(models.TextChoices):
         ACTIVE   = 'active',   'Active'
-        INACTIVE = 'inactive', 'Inactive'
+        REPLACED = 'replaced', 'Replaced'
         FAILED   = 'failed',   'Failed'
-        ARCHIVED = 'archived', 'Archived'
 
     deployment = models.ForeignKey(
         'deployments.Deployment',
@@ -93,7 +92,7 @@ class DeploymentVersion(models.Model):
         """Archiva la version sin eliminarla fisicamente de la BD."""
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status     = self.Status.ARCHIVED
+        self.status     = self.Status.REPLACED
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])
 
     @classmethod

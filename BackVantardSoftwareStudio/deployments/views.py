@@ -16,6 +16,8 @@ from system_logs.models import SystemLog
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
+DEPLOYMENT_NOT_FOUND = 'Deployment no encontrado.'
+
 from .models import Deployment
 from .utils import generate_site_url
 from .serializers import ( DeploymentCreateSerializer, DeploymentUpdateSerializer, DeploymentOutputSerializer, AdminDeploymentOutputSerializer, )
@@ -206,7 +208,7 @@ class DeploymentDetailView(APIView):
     def get(self, request, pk):
         deployment = self._get_deployment(pk, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         log_request(request, 'USER_GET_DEPLOYMENT', 200)
         return success_response(
@@ -217,7 +219,7 @@ class DeploymentDetailView(APIView):
     def put(self, request, pk):
         deployment = self._get_deployment(pk, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         serializer = DeploymentUpdateSerializer(
             data=request.data,
@@ -256,14 +258,14 @@ class DeploymentDetailView(APIView):
     def delete(self, request, pk):
         deployment = self._get_deployment(pk, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
           # Archivar todas las versiones activas antes de hacer soft delete
         from deployment_version.models import DeploymentVersion
         deployment.versions.filter(
             status=DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         deployment.soft_delete()
         log_request(request, 'USER_DELETE_DEPLOYMENT', 200)

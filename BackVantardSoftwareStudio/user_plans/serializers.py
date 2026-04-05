@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import UserPlan
 from plans.models import Plan
 
+PLAN_NAME_SOURCE = 'plan.name'
+
 
   # ---------------------------------------------------------------------------
   # Comprar plan (entrada)
@@ -13,7 +15,7 @@ class PurchasePlanSerializer(serializers.Serializer):
 
     def validate_plan_id(self, value):
         try:
-            plan = Plan.objects.get(pk=value, status=Plan.Status.ACTIVE, deleted_at__isnull=True)
+            Plan.objects.get(pk=value, status=Plan.Status.ACTIVE, deleted_at__isnull=True)
         except Plan.DoesNotExist:
             raise serializers.ValidationError('El plan no existe o no está disponible.')
         return value
@@ -29,7 +31,7 @@ class PurchasePlanSerializer(serializers.Serializer):
   # ---------------------------------------------------------------------------
 
 class ActivePlanOutputSerializer(serializers.ModelSerializer):
-    plan_name    = serializers.CharField(source='plan.name')
+    plan_name    = serializers.CharField(source=PLAN_NAME_SOURCE)
     plan_price   = serializers.DecimalField(source='plan.price', max_digits=10, decimal_places=2)
     max_disk_mb  = serializers.IntegerField(source='plan.max_disk_mb')
     days_remaining = serializers.IntegerField(read_only=True)
@@ -55,7 +57,7 @@ class ActivePlanOutputSerializer(serializers.ModelSerializer):
   # ---------------------------------------------------------------------------
 
 class UserPlanHistoryOutputSerializer(serializers.ModelSerializer):
-    plan_name  = serializers.CharField(source='plan.name')
+    plan_name  = serializers.CharField(source=PLAN_NAME_SOURCE)
     plan_price = serializers.DecimalField(source='plan.price', max_digits=10, decimal_places=2)
 
     class Meta:
@@ -78,7 +80,7 @@ class UserPlanHistoryOutputSerializer(serializers.ModelSerializer):
   # ---------------------------------------------------------------------------
 
 class AdminUserPlanOutputSerializer(serializers.ModelSerializer):
-    plan_name  = serializers.CharField(source='plan.name')
+    plan_name  = serializers.CharField(source=PLAN_NAME_SOURCE)
     user_email = serializers.EmailField(source='user.email')
     user_name  = serializers.SerializerMethodField()
 

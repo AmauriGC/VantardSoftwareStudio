@@ -10,6 +10,8 @@ from user_plans.models import UserPlan
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
+DEPLOYMENT_NOT_FOUND = 'Deployment no encontrado.'
+
 from .models import DeploymentVersion
 from .serializers import DeploymentVersionOutputSerializer
 from .utils import (
@@ -67,7 +69,7 @@ class UploadVersionView(APIView):
     def post(self, request, deployment_id):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         # Verificar plan activo
         active_plan = UserPlan.objects.filter(
@@ -138,12 +140,12 @@ class UploadVersionView(APIView):
                 status=500,
             )
 
-        # Archivar versión activa anterior
+        # Marcar como reemplazada la versión activa anterior
         DeploymentVersion.objects.filter(
             deployment   = deployment,
             status       = DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         # Crear nueva versión
         disk_used_mb = max(round(zip_info['total_uncompressed_mb']), 1)
@@ -179,7 +181,7 @@ class VersionListView(APIView):
     def get(self, request, deployment_id):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         qs = DeploymentVersion.objects.filter(
             deployment   = deployment,
@@ -213,7 +215,7 @@ class VersionDetailView(APIView):
     def get(self, request, deployment_id, pk):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         try:
             version = DeploymentVersion.objects.get(
@@ -241,7 +243,7 @@ class RollbackVersionView(APIView):
     def put(self, request, deployment_id, pk):
         deployment = _get_deployment(deployment_id, request.user)
         if not deployment:
-            return error_response(message='Deployment no encontrado.', status=404)
+            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         # Versión a restaurar
         try:
@@ -259,9 +261,9 @@ class RollbackVersionView(APIView):
                 status=400,
             )
 
-        if target_version.status != DeploymentVersion.Status.ARCHIVED:
+        if target_version.status != DeploymentVersion.Status.REPLACED:
             return error_response(
-                message='Solo se puede hacer rollback a versiones archivadas.',
+                message='Solo se puede hacer rollback a versiones reemplazadas.',
                 status=400,
             )
 
@@ -276,12 +278,12 @@ class RollbackVersionView(APIView):
                 status=500,
             )
 
-        # Archivar la versión activa actual
+        # Marcar como reemplazada la versión activa actual
         DeploymentVersion.objects.filter(
             deployment   = deployment,
             status       = DeploymentVersion.Status.ACTIVE,
             deleted_at__isnull=True,
-        ).update(status=DeploymentVersion.Status.ARCHIVED)
+        ).update(status=DeploymentVersion.Status.REPLACED)
 
         # Re-extraer el ZIP de la versión objetivo al directorio del sitio
         try:

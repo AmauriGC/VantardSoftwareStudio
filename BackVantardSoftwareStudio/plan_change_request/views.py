@@ -11,6 +11,8 @@ from plans.models import Plan
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
+SOLICITUD_NOT_FOUND = 'Solicitud no encontrada.'
+
 from .models import PlanChangeRequest
 from .serializers import ( CreatePlanChangeRequestSerializer, PlanChangeRequestOutputSerializer, AdminPlanChangeRequestOutputSerializer, )
 
@@ -111,7 +113,7 @@ class CancelPlanChangeRequestView(APIView):
             )
         except PlanChangeRequest.DoesNotExist:
             return error_response(
-                message='Solicitud no encontrada.',
+                message=SOLICITUD_NOT_FOUND,
                 status=404,
             )
 
@@ -178,7 +180,7 @@ class AdminApprovePlanChangeRequestView(APIView):
                 'current_plan', 'requested_plan', 'user'
             ).get(pk=pk, deleted_at__isnull=True)
         except PlanChangeRequest.DoesNotExist:
-            return error_response(message='Solicitud no encontrada.', status=404)
+            return error_response(message=SOLICITUD_NOT_FOUND, status=404)
 
         if not change_request.is_pending:
             return error_response(
@@ -233,7 +235,7 @@ class AdminRejectPlanChangeRequestView(APIView):
                 pk=pk, deleted_at__isnull=True
             )
         except PlanChangeRequest.DoesNotExist:
-            return error_response(message='Solicitud no encontrada.', status=404)
+            return error_response(message=SOLICITUD_NOT_FOUND, status=404)
 
         if not change_request.is_pending:
             return error_response(

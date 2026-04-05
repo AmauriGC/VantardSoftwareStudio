@@ -11,6 +11,5 @@ class PlanChangeRequestConfig(AppConfig):
         Importa signals si los necesitas en el futuro.
         Por ejemplo, para enviar notificaciones cuando cambie el estado.
         """
-        # import plan_change_requests.signals
         pass
     
