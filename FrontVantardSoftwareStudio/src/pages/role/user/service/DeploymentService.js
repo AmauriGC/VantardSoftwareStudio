@@ -72,20 +72,36 @@ export default class DeploymentService {
       const endpoint = `${ENDPOINTS.deployments.detail(deploymentId)}logs/`;
       const response = await axiosClient.get(endpoint);
       const payload = response?.data?.data ?? {};
-      return { ok: true, data: payload.logs ?? [] };
+      const logs = (payload.logs ?? []).map((item) => ({
+        id: item.id,
+        deployment_id: item.deployment_id ?? deploymentId,
+        ruta: item.ruta ?? item.path ?? "-",
+        metodo: item.metodo ?? item.method ?? "GET",
+        ip: item.ip ?? item.client_ip ?? "-",
+        codigo: item.codigo ?? item.status_code ?? 200,
+        fecha: item.fecha ?? item.created_at ?? null,
+      }));
+      return { ok: true, data: logs };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
       return { ok: false, message: normalized.message };
     }
   }
 
-  static async getTraffic(days = 7) {
+  static async getTraffic(days = 7, deploymentId = null) {
     try {
       const response = await axiosClient.get("/api/deployments/traffic/", {
-        params: { days },
+        params: {
+          days,
+          ...(deploymentId ? { deployment_id: deploymentId } : {}),
+        },
       });
       const payload = response?.data?.data ?? {};
-      return { ok: true, data: payload.traffic ?? [] };
+      const traffic = (payload.traffic ?? []).map((item) => ({
+        date: item.date ?? item.fecha ?? item.day,
+        visits: item.visits ?? item.visitas ?? 0,
+      }));
+      return { ok: true, data: traffic };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
       return { ok: false, message: normalized.message };

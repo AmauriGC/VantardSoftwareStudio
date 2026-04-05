@@ -14,14 +14,45 @@ function markSessionExpired() {
   }
 }
 
+function getFirstValidationMessage(payload) {
+  if (payload == null) return null;
+
+  if (typeof payload === "string") return payload;
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const nested = getFirstValidationMessage(item);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  if (typeof payload === "object") {
+    for (const value of Object.values(payload)) {
+      const nested = getFirstValidationMessage(value);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
 export function normalizeAxiosError(error) {
   const response = error?.response;
   const data = response?.data;
   const status = response?.status ?? null;
 
-  const message =
+  const topMessage =
     (typeof data === "object" && data !== null && (data.message || data.detail)) ||
     (typeof data === "string" ? data : null) ||
+    null;
+
+  const nestedValidationMessage =
+    typeof data === "object" && data !== null ? getFirstValidationMessage(data.data) : null;
+
+  const message =
+    nestedValidationMessage ||
+    topMessage ||
     error?.message ||
     "Ocurrió un error inesperado.";
 

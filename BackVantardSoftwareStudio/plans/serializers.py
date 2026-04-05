@@ -10,6 +10,7 @@ class PlanOutputSerializer(serializers.ModelSerializer):
 
     max_disk_gb = serializers.FloatField(read_only=True)
     is_free     = serializers.BooleanField(read_only=True)
+    max_upload_mb = serializers.SerializerMethodField()
 
     class Meta:
         model  = Plan
@@ -18,12 +19,34 @@ class PlanOutputSerializer(serializers.ModelSerializer):
             'name',
             'price',
             'max_disk_mb',
+            'max_upload_mb',
             'max_disk_gb',
             'is_free',
             'status',
             'created_at',
             'updated_at',
         ]
+
+    def get_max_upload_mb(self, obj):
+        explicit = getattr(obj, 'max_upload_mb', None)
+        if explicit is not None:
+            return explicit
+
+        by_name = {
+            'gratis': 5,
+            'free': 5,
+            'basico': 5,
+            'básico': 5,
+            'medio': 10,
+            'pro': 10,
+            'premium': 20,
+            'completo': 20,
+        }
+        plan_name = str(getattr(obj, 'name', '')).strip().lower()
+        if plan_name in by_name:
+            return by_name[plan_name]
+
+        return min(getattr(obj, 'max_disk_mb', 10), 10)
 
 
 # ---------------------------------------------------------------------------

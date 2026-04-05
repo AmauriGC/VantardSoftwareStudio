@@ -1,7 +1,16 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.tokens import default_token_generator
+from django.db import transaction
+from django.utils import timezone
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from datetime import timedelta
+from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
@@ -16,8 +25,12 @@ from .serializers import (
     UserChangePasswordSerializer,
     UserListOutputSerializer,
     UserUpdateStatusSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
 )
 from .permissions import IsAdminUser
+from plans.models import Plan
+from user_plans.models import UserPlan
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
@@ -39,13 +52,39 @@ class RegisterView(APIView):
                 status=400,
             )
 
+        free_plan = Plan.objects.filter(
+            status=Plan.Status.ACTIVE,
+            deleted_at__isnull=True,
+            price=0,
+        ).order_by('id').first()
+
+        if not free_plan:
+            log_request(request, 'USER_REGISTER_FAILED', 500)
+            return error_response(
+                message='No hay un plan Gratis activo configurado. Contacta al administrador.',
+                status=500,
+            )
+
         data = serializer.validated_data
-        user = User.objects.create_user(
-            email=data['email'],
-            password=data['password'],
-            first_name=data['first_name'],
-            last_name=data['last_name'],
-        )
+        now = timezone.now()
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                email=data['email'],
+                password=data['password'],
+                first_name=data['first_name'],
+                last_name=data['last_name'],
+            )
+
+            UserPlan.objects.create(
+                user=user,
+                plan=free_plan,
+                purchase_date=now,
+                expiration_date=now + timedelta(days=30),
+                months_purchased=1,
+                total_price_paid=free_plan.price,
+                status=UserPlan.Status.ACTIVE,
+            )
 
         refresh = RefreshToken.for_user(user)
         log_request(request, 'USER_REGISTER', 201, user_id=user.pk)
@@ -67,6 +106,8 @@ class RegisterView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_login'
 
     def post(self, request):
         serializer = UserLoginSerializer(data=request.data)
@@ -247,6 +288,110 @@ class ChangePasswordView(APIView):
         log_request(request, 'USER_CHANGE_PASSWORD', 200)
         return success_response(message='Contraseña actualizada correctamente.')
 
+
+# ---------------------------------------------------------------------------
+# Recuperación de contraseña
+# ---------------------------------------------------------------------------
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset_request'
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message='Datos inválidos.',
+                data=serializer.errors,
+                status=400,
+            )
+
+        email = serializer.validated_data['email'].strip().lower()
+        user = User.objects.filter(
+            email__iexact=email,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).select_related('role').first()
+
+        # Respuesta genérica para evitar enumeración de correos.
+        generic_message = (
+            'Si el correo existe y es elegible, se enviará un enlace para restablecer la contraseña.'
+        )
+
+        if user and (not user.role or str(user.role.role_name).strip().lower() != 'admin'):
+            if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+                log_request(request, 'PASSWORD_RESET_REQUEST_SMTP_MISSING_CONFIG', 500, user_id=user.pk)
+                return success_response(message=generic_message)
+
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = f"{settings.FRONTEND_URL.rstrip('/')}/auth/restablecer?uid={uid}&token={token}"
+
+            try:
+                send_mail(
+                    subject='Recuperación de contraseña - VSS',
+                    message=(
+                        'Recibimos una solicitud para restablecer tu contraseña.\n\n'
+                        f'Abre este enlace: {reset_url}\n\n'
+                        'Si no solicitaste este cambio, ignora este correo.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                log_request(request, 'PASSWORD_RESET_REQUEST_EMAIL_FAILED', 500, user_id=user.pk)
+                return success_response(message=generic_message)
+
+            log_request(request, 'PASSWORD_RESET_REQUEST', 200, user_id=user.pk)
+        else:
+            log_request(request, 'PASSWORD_RESET_REQUEST_IGNORED', 200)
+
+        return success_response(message=generic_message)
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset_confirm'
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(
+                message='Datos inválidos.',
+                data=serializer.errors,
+                status=400,
+            )
+
+        data = serializer.validated_data
+
+        try:
+            user_id = force_str(urlsafe_base64_decode(data['uid']))
+            user = User.objects.filter(
+                pk=user_id,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).select_related('role').first()
+        except Exception:
+            user = None
+
+        if (
+            not user
+            or (user.role and str(user.role.role_name).strip().lower() == 'admin')
+            or not default_token_generator.check_token(user, data['token'])
+        ):
+            return error_response(
+                message='El enlace es inválido o ya expiró.',
+                status=400,
+            )
+
+        user.set_password(data['new_password'])
+        user.save(update_fields=['password', 'updated_at'])
+        log_request(request, 'PASSWORD_RESET_CONFIRM', 200, user_id=user.pk)
+
+        return success_response(message='Contraseña restablecida correctamente.')
 
 # ---------------------------------------------------------------------------
 # Eliminar cuenta (soft delete)

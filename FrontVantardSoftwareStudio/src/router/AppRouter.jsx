@@ -5,6 +5,7 @@ import RequireRole from "./RequireRole.jsx";
 import DashboardLayout from "../layouts/DashboardLayout.jsx";
 
 import RecoverPasswordPage from "../pages/auth/RecoverPasswordPage.jsx";
+import ResetPasswordPage from "../pages/auth/ResetPasswordPage.jsx";
 import RegisterPage from "../pages/auth/RegisterPage.jsx";
 import AccessDeniedPage from "../pages/errors/AccessDeniedPage.jsx";
 
@@ -33,6 +34,7 @@ export default function AppRouter() {
 
         {/* Auth públicas */}
         <Route path="/auth/recuperar" element={<RecoverPasswordPage />} />
+        <Route path="/auth/restablecer" element={<ResetPasswordPage />} />
         <Route path="/auth/registro" element={<RegisterPage />} />
 
         {/* Error */}

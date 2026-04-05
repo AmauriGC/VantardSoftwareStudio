@@ -7,6 +7,8 @@ export const ENDPOINTS = {
     login: "/api/users/login/",
     refresh: "/api/users/refresh/",
     logout: "/api/users/logout/",
+    passwordResetRequest: "/api/users/password-reset/request/",
+    passwordResetConfirm: "/api/users/password-reset/confirm/",
   },
   users: {
     profile: "/api/users/profile/",

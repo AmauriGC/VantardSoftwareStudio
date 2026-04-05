@@ -1,14 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Eye, EyeOff, Pencil } from "lucide-react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseInput from "../../../components/BaseInput";
 import BaseModal from "../../../components/BaseModal";
 import { confirmAction, showErrorAlert, showSuccessAlert } from "../../../kernel/alerts";
+import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 import { clearAuth, getAuth } from "../../auth/store/authStore";
 import UserService from "./service/UserService";
+
+const NAME_PATTERN = /^[\p{L}\s'-]+$/u;
+
+function sanitizeNameInput(value) {
+  return String(value ?? "")
+    .replaceAll(/[^\p{L}\s]/gu, "")
+    .replaceAll(/\s{2,}/g, " ");
+}
+
+function buildPasswordChecklist(password) {
+  const value = String(password ?? "");
+  return [
+    { label: "Mínimo 8 caracteres", ok: value.length >= 8 },
+    { label: "Al menos una mayúscula", ok: /[A-Z]/.test(value) },
+    { label: "Al menos una minúscula", ok: /[a-z]/.test(value) },
+    { label: "Al menos un número", ok: /\d/.test(value) },
+    { label: "Al menos un carácter especial", ok: /[^A-Za-z0-9]/.test(value) },
+  ];
+}
 
 export default function UserPerfil() {
   const navigate = useNavigate();
@@ -22,9 +42,20 @@ export default function UserPerfil() {
   const [profile, setProfile] = useState(null);
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const currentPasswordField = useValidatedField("", VALIDATION_GROUPS.loginPassword);
+  const newPasswordField = useValidatedField("", VALIDATION_GROUPS.registerPassword);
+  const confirmPasswordField = useValidatedField(
+    "",
+    VALIDATION_GROUPS.confirmPassword,
+    () => ({ password: newPasswordField.value })
+  );
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const passwordChecklist = useMemo(
+    () => buildPasswordChecklist(newPasswordField.value),
+    [newPasswordField.value]
+  );
 
   const iniciales = useMemo(() => {
     const first = (profile?.first_name ?? "").trim().charAt(0);
@@ -65,6 +96,14 @@ export default function UserPerfil() {
       return;
     }
 
+    if (!NAME_PATTERN.test(nombre.trim()) || !NAME_PATTERN.test(apellido.trim())) {
+      showErrorAlert({
+        title: "Nombre inválido",
+        text: "Nombre y apellido solo permiten letras, espacios, apóstrofe y guion.",
+      });
+      return;
+    }
+
     setIsProfileSubmitting(true);
     const result = await UserService.updateProfile({
       first_name: nombre.trim(),
@@ -91,27 +130,23 @@ export default function UserPerfil() {
   const handleCambiarPassword = async () => {
     if (isPasswordSubmitting) return;
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      showErrorAlert({
-        title: "Datos incompletos",
-        text: "Debes completar todos los campos de la contrasena.",
-      });
-      return;
-    }
+    const validCurrent = currentPasswordField.validate();
+    const validNew = newPasswordField.validate();
+    const validConfirm = confirmPasswordField.validate();
 
-    if (newPassword !== confirmPassword) {
+    if (!validCurrent || !validNew || !validConfirm) {
       showErrorAlert({
-        title: "Contrasenas no coinciden",
-        text: "La nueva contrasena y la confirmacion deben ser iguales.",
+        title: "Revisa los datos",
+        text: "Corrige los campos marcados para continuar.",
       });
       return;
     }
 
     setIsPasswordSubmitting(true);
     const result = await UserService.changePassword({
-      current_password: currentPassword,
-      new_password: newPassword,
-      confirm_password: confirmPassword,
+      current_password: currentPasswordField.value,
+      new_password: newPasswordField.value,
+      confirm_password: confirmPasswordField.value,
     });
 
     if (!result.ok) {
@@ -123,10 +158,13 @@ export default function UserPerfil() {
       return;
     }
 
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+    currentPasswordField.setValue("", { shouldValidate: false, shouldDirty: false });
+    newPasswordField.setValue("", { shouldValidate: false, shouldDirty: false });
+    confirmPasswordField.setValue("", { shouldValidate: false, shouldDirty: false });
     setPasswordModalAbierto(false);
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setIsPasswordSubmitting(false);
     showSuccessAlert({ title: "Contrasena actualizada", text: "Se guardo tu nueva contrasena." });
   };
@@ -273,13 +311,13 @@ export default function UserPerfil() {
               id="edit-nombre"
               label="Nombre"
               value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
+              onChange={(e) => setNombre(sanitizeNameInput(e.target.value))}
             />
             <BaseInput
               id="edit-apellido"
               label="Apellido"
               value={apellido}
-              onChange={(e) => setApellido(e.target.value)}
+              onChange={(e) => setApellido(sanitizeNameInput(e.target.value))}
             />
           </div>
           <BaseInput id="edit-email" label="Correo electronico" type="email" value={profile?.email || ""} disabled />
@@ -288,7 +326,12 @@ export default function UserPerfil() {
 
       <BaseModal
         open={passwordModalAbierto}
-        onClose={() => setPasswordModalAbierto(false)}
+        onClose={() => {
+          setPasswordModalAbierto(false);
+          setShowCurrentPassword(false);
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        }}
         title="Cambiar contrasena"
         footer={
           <>
@@ -308,24 +351,73 @@ export default function UserPerfil() {
         <div className="flex flex-col gap-4">
           <BaseInput
             id="current-password"
-            type="password"
+            type={showCurrentPassword ? "text" : "password"}
             label="Contrasena actual"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            value={currentPasswordField.value}
+            onChange={currentPasswordField.onChange}
+            onBlur={currentPasswordField.onBlur}
+            error={currentPasswordField.error}
+            rightAdornment={
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((s) => !s)}
+                className="h-11 px-3 text-gray-500 hover:text-gray-700"
+                aria-label={showCurrentPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+              >
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
           <BaseInput
             id="new-password"
-            type="password"
+            type={showNewPassword ? "text" : "password"}
             label="Nueva contrasena"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            value={newPasswordField.value}
+            onChange={newPasswordField.onChange}
+            onBlur={newPasswordField.onBlur}
+            error={newPasswordField.error}
+            rightAdornment={
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((s) => !s)}
+                className="h-11 px-3 text-gray-500 hover:text-gray-700"
+                aria-label={showNewPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+              >
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+            <p className="text-xs font-medium text-gray-600 mb-2">Tu contraseña debe cumplir:</p>
+            <ul className="space-y-1">
+              {passwordChecklist.map((item) => (
+                <li
+                  key={item.label}
+                  className={`text-xs ${item.ok ? "text-emerald-700" : "text-gray-500"}`}
+                >
+                  {item.ok ? "✓" : "•"} {item.label}
+                </li>
+              ))}
+            </ul>
+          </div>
           <BaseInput
             id="confirm-password"
-            type="password"
+            type={showConfirmPassword ? "text" : "password"}
             label="Confirmar nueva contrasena"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            value={confirmPasswordField.value}
+            onChange={confirmPasswordField.onChange}
+            onBlur={confirmPasswordField.onBlur}
+            error={confirmPasswordField.error}
+            rightAdornment={
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((s) => !s)}
+                className="h-11 px-3 text-gray-500 hover:text-gray-700"
+                aria-label={showConfirmPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
           />
         </div>
       </BaseModal>

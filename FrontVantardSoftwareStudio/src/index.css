@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Edge/IE: ocultar icono nativo de password para evitar doble "ojo" */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+	display: none;
+}

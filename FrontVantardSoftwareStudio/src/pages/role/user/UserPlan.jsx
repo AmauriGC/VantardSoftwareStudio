@@ -107,8 +107,14 @@ export default function UserPlan() {
     Rechazado: "bg-red-50 text-red-700",
   };
 
+  const planesList = Array.isArray(planes) ? planes : [];
+  const solicitudesList = Array.isArray(misSolicitudes) ? misSolicitudes : [];
+
   // Encontrar el plan actual del usuario
-  const planActual = planes.find((p) => p.id === profile?.plan_id || p.name === profile?.plan_name) || planes[0];
+  const planActual =
+    planesList.find((p) => p.id === profile?.plan_id || p.name === profile?.plan_name) ||
+    planesList[0] ||
+    null;
 
   if (loading) {
     return (
@@ -192,7 +198,7 @@ export default function UserPlan() {
       <div>
         <h2 className="text-sm font-semibold text-gray-900 mb-3">Planes disponibles</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {planes.map((p) => {
+          {planesList.map((p) => {
             const esActual = p.id === planActual?.id || p.name === planActual?.name;
             return (
               <BaseCard
@@ -245,7 +251,7 @@ export default function UserPlan() {
       </div>
 
       {/* Historial de solicitudes */}
-      {misSolicitudes.length > 0 && (
+      {solicitudesList.length > 0 && (
         <BaseCard className="overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200">
             <h2 className="text-sm font-semibold text-gray-900">Mis solicitudes</h2>
@@ -266,7 +272,7 @@ export default function UserPlan() {
               </tr>
             </thead>
             <tbody>
-              {misSolicitudes.map((s) => (
+              {solicitudesList.map((s) => (
                 <tr
                   key={s.id}
                   className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
@@ -296,7 +302,7 @@ export default function UserPlan() {
       <BaseModal
         open={modalAbierto}
         onClose={() => setModalAbierto(false)}
-        title={`Solicitar plan ${planSeleccionado?.nombre}`}
+        title={`Solicitar plan ${planSeleccionado?.name || planSeleccionado?.nombre || ""}`}
         footer={
           <>
             <BaseButton
@@ -315,12 +321,12 @@ export default function UserPlan() {
         <div className="flex flex-col gap-4">
           <p className="text-sm text-gray-600">
             Estás solicitando cambiar al plan{" "}
-            <span className="font-semibold text-gray-900">{planSeleccionado?.nombre}</span>
-            {planSeleccionado?.precio > 0
-              ? ` por $${planSeleccionado?.precio}/mes.`
+            <span className="font-semibold text-gray-900">{planSeleccionado?.name || planSeleccionado?.nombre}</span>
+            {(planSeleccionado?.price || planSeleccionado?.precio) > 0
+              ? ` por $${planSeleccionado?.price || planSeleccionado?.precio}/mes.`
               : " (gratuito)."}
           </p>
-          {planSeleccionado?.precio > 0 && (
+          {(planSeleccionado?.price || planSeleccionado?.precio) > 0 && (
             <BaseInput
               id="meses"
               label="Número de meses"
@@ -329,7 +335,7 @@ export default function UserPlan() {
               onChange={(e) => setMeses(e.target.value)}
             />
           )}
-          {planSeleccionado?.precio > 0 && (
+          {(planSeleccionado?.price || planSeleccionado?.precio) > 0 && (
             <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600">Total estimado</p>
