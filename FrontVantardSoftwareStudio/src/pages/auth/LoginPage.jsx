@@ -28,8 +28,8 @@ export default function LoginPage() {
       if (expired) {
         globalThis.sessionStorage.removeItem(SESSION_EXPIRED_KEY);
         showInfoAlert({
-          title: "Sesion expirada",
-          text: "Tu sesion expiro o no es valida. Inicia sesion nuevamente.",
+          title: "Sesión expirada",
+          text: "Tu sesión expiró o no es válida. Inicia sesión nuevamente.",
         });
       }
     } catch {
@@ -61,10 +61,10 @@ export default function LoginPage() {
     const result = await AuthService.login({ email: emailField.value, password: passwordField.value });
 
     if (!result.ok) {
-      setError(result.message || "No se pudo iniciar sesion.");
+      setError(result.message || "No se pudo iniciar sesión.");
       showErrorAlert({
-        title: "No se pudo iniciar sesion",
-        text: result.message || "Verifica tus credenciales e intentalo de nuevo.",
+        title: "No se pudo iniciar sesión",
+        text: result.message || "Verifica tus credenciales e inténtalo de nuevo.",
       });
       setIsSubmitting(false);
       return;
@@ -73,8 +73,8 @@ export default function LoginPage() {
     if (!result.data?.accessToken || !result.data?.refreshToken) {
       setError("El backend no devolvio los tokens esperados.");
       showErrorAlert({
-        title: "No se pudo iniciar sesion",
-        text: "La respuesta del servidor no contiene tokens validos.",
+        title: "No se pudo iniciar sesión",
+        text: "La respuesta del servidor no contiene tokens válidos.",
       });
       setIsSubmitting(false);
       return;
@@ -86,7 +86,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthLayout title="Bienvenido de vuelta" subtitle="Inicia sesion en tu cuenta de VSS">
+    <AuthLayout title="Bienvenido de vuelta" subtitle="Inicia sesión en tu cuenta de VSS">
       <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
         <BaseInput
           id="email"
@@ -103,9 +103,9 @@ export default function LoginPage() {
         <BaseInput
           id="password"
           type={showPassword ? "text" : "password"}
-          label="Contrasena"
+          label="Contraseña"
           autoComplete="current-password"
-          placeholder="Ingresa tu contrasena"
+          placeholder="Ingresa tu contraseña"
           value={passwordField.value}
           onChange={passwordField.onChange}
           onBlur={passwordField.onBlur}
@@ -115,7 +115,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               className="h-11 px-3 text-gray-500 hover:text-gray-700"
-              aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -124,14 +124,14 @@ export default function LoginPage() {
 
         <div className="flex items-center justify-end">
           <Link to="/auth/recuperar" className="text-sm text-blue-600 hover:text-blue-700">
-            Olvidaste tu contrasena?
+            ¿Olvidaste tu contraseña?
           </Link>
         </div>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <BaseButton type="submit" className="h-11 w-full" disabled={isSubmitting} isLoading={isSubmitting}>
-          Iniciar sesion
+          Iniciar sesión
         </BaseButton>
 
         <p className="text-center text-sm text-gray-600">
