@@ -156,10 +156,12 @@ axiosClient.interceptors.response.use(
         if (globalThis.window !== undefined) {
           globalThis.location.replace("/");
         }
+
+        return Promise.reject(error);
       }
     }
 
-    if (normalized.status === 401) {
+    if (normalized.status === 401 && !isAuthEndpoint(originalRequest.url)) {
       clearAuth();
       markSessionExpired();
 
