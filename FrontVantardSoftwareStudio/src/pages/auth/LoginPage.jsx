@@ -85,20 +85,6 @@ export default function LoginPage() {
     setIsSubmitting(false);
   };
 
-  const fillAdmin = () => {
-    if (isSubmitting) return;
-    emailField.setValue("admin@vantard.com", { shouldValidate: true });
-    passwordField.setValue("Admin1234!", { shouldValidate: true });
-    setError("");
-  };
-
-  const fillUser = () => {
-    if (isSubmitting) return;
-    emailField.setValue("test@test.com", { shouldValidate: true });
-    passwordField.setValue("Test1234!", { shouldValidate: true });
-    setError("");
-  };
-
   return (
     <AuthLayout title="Bienvenido de vuelta" subtitle="Inicia sesion en tu cuenta de VSS">
       <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
@@ -155,26 +141,6 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <div className="w-full flex items-center justify-center gap-2">
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillAdmin}
-            disabled={isSubmitting}
-          >
-            ADMIN
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillUser}
-            disabled={isSubmitting}
-          >
-            USER
-          </BaseButton>
-        </div>
       </form>
     </AuthLayout>
   );
