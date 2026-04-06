@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from datetime import timedelta
 from django.conf import settings
 from rest_framework.views import APIView
@@ -332,7 +332,10 @@ class PasswordResetRequestView(APIView):
         )
 
         if user and (not user.role or str(user.role.role_name).strip().lower() != 'admin'):
-            if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+            # La validación de credenciales solo aplica al backend SMTP real.
+            # console.EmailBackend no necesita EMAIL_HOST_USER/PASSWORD.
+            uses_smtp = 'smtp' in settings.EMAIL_BACKEND.lower()
+            if uses_smtp and (not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD):
                 log_request(request, 'PASSWORD_RESET_REQUEST_SMTP_MISSING_CONFIG', 500, user_id=user.pk)
                 return success_response(message=generic_message)
 
@@ -340,18 +343,114 @@ class PasswordResetRequestView(APIView):
             token = default_token_generator.make_token(user)
             reset_url = f"{settings.FRONTEND_URL.rstrip('/')}/auth/restablecer?uid={uid}&token={token}"
 
+            plain_text = (
+                f'Hola {user.first_name},\n\n'
+                'Recibimos una solicitud para restablecer la contraseña de tu cuenta en Vantard Software Studio.\n\n'
+                f'Restablece tu contraseña aquí:\n{reset_url}\n\n'
+                'Este enlace expira en 1 hora.\n\n'
+                '⚠ Si no fuiste tú quien solicitó este cambio, ignora este correo. '
+                'Tu contraseña actual sigue siendo la misma y nadie más puede acceder a tu cuenta. '
+                'No compartas este enlace con nadie.\n\n'
+                '— El equipo de Vantard Software Studio'
+            )
+
+            html_content = f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f6f8;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f8;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1d4ed8;padding:32px 40px;text-align:center;">
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:0.5px;">
+              Vantard Software Studio
+            </h1>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#111827;">
+              Hola, {user.first_name} 👋
+            </p>
+            <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.6;">
+              Recibimos una solicitud para restablecer la contraseña de tu cuenta.<br>
+              Haz clic en el botón de abajo para crear una nueva contraseña.
+            </p>
+
+            <!-- Button -->
+            <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+              <tr>
+                <td style="background-color:#1d4ed8;border-radius:6px;">
+                  <a href="{reset_url}"
+                     style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:6px;">
+                    Restablecer contraseña
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">
+              Si el botón no funciona, copia y pega este enlace en tu navegador:
+            </p>
+            <p style="margin:0 0 28px;font-size:12px;color:#2563eb;word-break:break-all;">
+              <a href="{reset_url}" style="color:#2563eb;">{reset_url}</a>
+            </p>
+
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">
+              ⏱ Este enlace expira en <strong>1 hora</strong>.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Warning -->
+        <tr>
+          <td style="padding:0 40px 32px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef9c3;border:1px solid #fde047;border-radius:6px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#854d0e;">
+                    ⚠ ¿No fuiste tú?
+                  </p>
+                  <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
+                    Si no solicitaste restablecer tu contraseña, ignora este correo. Tu contraseña actual
+                    no cambiará y nadie más puede acceder a tu cuenta.<br>
+                    <strong>No compartas este enlace con nadie.</strong>
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color:#f9fafb;padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              Este correo fue enviado automáticamente por Vantard Software Studio. Por favor no respondas a este mensaje.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
             try:
-                send_mail(
+                email_msg = EmailMultiAlternatives(
                     subject='Recuperación de contraseña - VSS',
-                    message=(
-                        'Recibimos una solicitud para restablecer tu contraseña.\n\n'
-                        f'Abre este enlace: {reset_url}\n\n'
-                        'Si no solicitaste este cambio, ignora este correo.'
-                    ),
+                    body=plain_text,
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=False,
+                    to=[user.email],
                 )
+                email_msg.attach_alternative(html_content, 'text/html')
+                email_msg.send(fail_silently=False)
             except Exception:
                 log_request(request, 'PASSWORD_RESET_REQUEST_EMAIL_FAILED', 500, user_id=user.pk)
                 return success_response(message=generic_message)
