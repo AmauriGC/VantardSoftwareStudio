@@ -1,34 +1,63 @@
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseTable from "../../../components/BaseTable";
 import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
-import { logsAcceso, despliegues, usuarioActual } from "../../../data/mockData";
+import DeploymentService from "./service/DeploymentService";
 
 export default function UserLogs() {
   const [busqueda, setBusqueda] = useState("");
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [desplieguesMap, setDesplieguesMap] = useState(new Map());
 
-  const misDespliegues = despliegues.filter((d) => d.usuarioId === usuarioActual.id);
-  const misDesplieguesMap = new Map(misDespliegues.map((d) => [d.id, d.dominio]));
+  useEffect(() => {
+    const cargarLogs = async () => {
+      try {
+        // Obtener lista de despliegues
+        const resultDeploy = await DeploymentService.listMyDeployments();
+        if (resultDeploy.ok && resultDeploy.data.length > 0) {
+          const allLogs = [];
+          const mapa = new Map(
+            resultDeploy.data.map((d) => [d.id, d.domain || d.dominio])
+          );
+          setDesplieguesMap(mapa);
 
-  const misLogs = logsAcceso.filter((l) =>
-    misDespliegues.some((d) => d.id === l.despliegueId)
-  );
+          // Obtener logs de cada despliegue
+          for (const deployment of resultDeploy.data) {
+            const resultLogs = await DeploymentService.getLogs(deployment.id);
+            if (resultLogs.ok) {
+              allLogs.push(...resultLogs.data);
+            }
+          }
+          setLogs(allLogs);
+        }
+      } catch (error) {
+        console.error("Error cargando logs:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const filtrados = misLogs.filter(
+    cargarLogs();
+  }, []);
+
+  const filtrados = logs.filter(
     (l) =>
       l.ruta.toLowerCase().includes(busqueda.toLowerCase()) ||
       l.ip.includes(busqueda) ||
-      (misDesplieguesMap.get(l.despliegueId) || "").toLowerCase().includes(busqueda.toLowerCase())
+      (desplieguesMap.get(l.deployment_id) || 
+       desplieguesMap.get(l.despliegueId) || 
+       "").toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const columns = [
     {
       key: "sitio",
       header: "Sitio",
-      render: (l) => misDesplieguesMap.get(l.despliegueId) || l.despliegueId,
+      render: (l) => desplieguesMap.get(l.deployment_id) || desplieguesMap.get(l.despliegueId) || l.deployment_id,
     },
     { key: "ruta", header: "Ruta" },
     { key: "metodo", header: "Método" },
@@ -45,6 +74,23 @@ export default function UserLogs() {
       render: (l) => formatearFecha(l.fecha),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Registros de acceso</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Historial de visitas a tus sitios desplegados
+          </p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando registros...</p>
+        </BaseCard>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">

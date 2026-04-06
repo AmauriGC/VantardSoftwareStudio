@@ -6,7 +6,7 @@ import BaseButton from "../../components/BaseButton";
 import BaseInput from "../../components/BaseInput";
 import AuthLayout from "./components/AuthLayout";
 import AuthService from "./service/AuthService";
-import { AUTH_EMAILS, AUTH_ROLES } from "./constants/authConstants";
+import { AUTH_ROLES } from "./constants/authConstants";
 import { getRole, setAuth } from "./store/authStore";
 import { useValidatedField, VALIDATION_GROUPS } from "../../config/validator";
 import { showErrorAlert, showInfoAlert } from "../../kernel/alerts";
@@ -47,7 +47,7 @@ export default function LoginPage() {
     }
   }, [navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (isSubmitting) return;
@@ -57,7 +57,8 @@ export default function LoginPage() {
 
     setError("");
     setIsSubmitting(true);
-    const result = AuthService.login({ email: emailField.value, password: passwordField.value });
+
+    const result = await AuthService.login({ email: emailField.value, password: passwordField.value });
 
     if (!result.ok) {
       setError(result.message || "No se pudo iniciar sesión.");
@@ -69,22 +70,19 @@ export default function LoginPage() {
       return;
     }
 
+    if (!result.data?.accessToken || !result.data?.refreshToken) {
+      setError("El backend no devolvio los tokens esperados.");
+      showErrorAlert({
+        title: "No se pudo iniciar sesión",
+        text: "La respuesta del servidor no contiene tokens válidos.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setAuth(result.data);
     navigate(result.data.role === AUTH_ROLES.ADMIN ? "/admin" : "/user", { replace: true });
-  };
-
-  const fillAdmin = () => {
-    if (isSubmitting) return;
-    emailField.setValue(AUTH_EMAILS.ADMIN, { shouldValidate: true });
-    passwordField.setValue("123456", { shouldValidate: true });
-    setError("");
-  };
-
-  const fillUser = () => {
-    if (isSubmitting) return;
-    emailField.setValue(AUTH_EMAILS.USER, { shouldValidate: true });
-    passwordField.setValue("123456", { shouldValidate: true });
-    setError("");
+    setIsSubmitting(false);
   };
 
   return (
@@ -137,32 +135,12 @@ export default function LoginPage() {
         </BaseButton>
 
         <p className="text-center text-sm text-gray-600">
-          ¿No tienes una cuenta?{" "}
+          No tienes una cuenta?{" "}
           <Link to="/auth/registro" className="text-blue-600 hover:text-blue-700">
             Crear cuenta
           </Link>
         </p>
 
-        <div className="w-full flex items-center justify-center gap-2">
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillAdmin}
-            disabled={isSubmitting}
-          >
-            ADMIN
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillUser}
-            disabled={isSubmitting}
-          >
-            USER
-          </BaseButton>
-        </div>
       </form>
     </AuthLayout>
   );

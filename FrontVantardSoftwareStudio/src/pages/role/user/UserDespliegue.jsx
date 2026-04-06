@@ -1,12 +1,13 @@
 import { Globe, HardDrive, Activity, UploadCloud, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseTable from "../../../components/BaseTable";
 import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
-import { usuarioActual, despliegues, logsAcceso } from "../../../data/mockData";
+import DeploymentService from "./service/DeploymentService";
 
 const logColumns = [
   { key: "ruta", header: "Ruta" },
@@ -34,11 +35,62 @@ const ESTADO_CLASES = {
 
 export default function UserDespliegue() {
   const navigate = useNavigate();
+  const [miDespliegue, setMiDespliegue] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const miDespliegue = despliegues.find((d) => d.usuarioId === usuarioActual.id);
-  const logs = miDespliegue
-    ? logsAcceso.filter((l) => l.despliegueId === miDespliegue.id)
-    : [];
+  useEffect(() => {
+    const cargarDatos = async () => {
+      try {
+        // Obtener la lista de despliegues del usuario
+        const resultDeploy = await DeploymentService.listMyDeployments();
+        if (resultDeploy.ok && resultDeploy.data.length > 0) {
+          const primero = resultDeploy.data[0];
+          // Obtener el detalle completo del primer despliegue
+          const resultDetail = await DeploymentService.getDeployment(primero.id);
+          if (resultDetail.ok) {
+            setMiDespliegue(resultDetail.data);
+            // Obtener los logs del despliegue
+            const resultLogs = await DeploymentService.getLogs(primero.id);
+            if (resultLogs.ok) {
+              const normalizedLogs = (Array.isArray(resultLogs.data) ? resultLogs.data : []).map(
+                (item) => ({
+                  id: item.id,
+                  ruta: item.ruta ?? item.path ?? "-",
+                  metodo: item.metodo ?? item.method ?? "GET",
+                  ip: item.ip ?? item.client_ip ?? "-",
+                  codigo: item.codigo ?? item.status_code ?? 200,
+                  fecha: item.fecha ?? item.created_at ?? new Date().toISOString(),
+                })
+              );
+              setLogs(normalizedLogs);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error cargando despliegue:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDatos();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Mi despliegue</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Gestión de tu sitio web estático</p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando despliegue...</p>
+        </BaseCard>
+      </div>
+    );
+  }
 
   if (!miDespliegue) {
     return (
@@ -66,6 +118,24 @@ export default function UserDespliegue() {
     );
   }
 
+  const domain = miDespliegue.domain ?? miDespliegue.dominio ?? "-";
+  const statusRaw = miDespliegue.status ?? miDespliegue.estado ?? "active";
+  const statusLabelMap = {
+    active: "Activo",
+    updating: "Actualizando",
+    error: "Error",
+    inactive: "Suspendido",
+  };
+  const statusLabel = statusLabelMap[String(statusRaw).toLowerCase()] ?? statusRaw;
+  const diskUsedMb =
+    miDespliegue.disk_used_mb ?? miDespliegue.used_disk_mb ?? miDespliegue.usoDiscoMB ?? 0;
+  const trafficCount = miDespliegue.traffic_count ?? miDespliegue.trafico ?? 0;
+  const createdAt = miDespliegue.created_at ?? miDespliegue.creadoEn ?? "-";
+  const siteUrl =
+    miDespliegue.site_url ??
+    miDespliegue.siteUrl ??
+    (String(domain).includes(".") ? `https://${domain}` : `https://${domain}.vss.app`);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Encabezado */}
@@ -89,19 +159,19 @@ export default function UserDespliegue() {
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900 font-mono">
-                {miDespliegue.dominio}
+                {domain}
               </h2>
               <span
                 className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  ESTADO_CLASES[miDespliegue.estado] || "bg-gray-100 text-gray-600"
+                  ESTADO_CLASES[statusLabel] || "bg-gray-100 text-gray-600"
                 }`}
               >
-                {miDespliegue.estado}
+                {statusLabel}
               </span>
             </div>
           </div>
           <a
-            href={`https://${miDespliegue.dominio}`}
+            href={siteUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700"
@@ -119,7 +189,7 @@ export default function UserDespliegue() {
             <div className="flex items-center gap-1.5">
               <HardDrive className="h-4 w-4 text-gray-400" />
               <p className="text-sm font-semibold text-gray-900">
-                {miDespliegue.usoDiscoMB} MB
+                {diskUsedMb} MB
               </p>
             </div>
           </div>
@@ -130,7 +200,7 @@ export default function UserDespliegue() {
             <div className="flex items-center gap-1.5">
               <Activity className="h-4 w-4 text-gray-400" />
               <p className="text-sm font-semibold text-gray-900">
-                {miDespliegue.trafico.toLocaleString("es-MX")} visitas
+                {Number(trafficCount).toLocaleString("es-MX")} visitas
               </p>
             </div>
           </div>
@@ -138,7 +208,7 @@ export default function UserDespliegue() {
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
               Creado
             </p>
-            <p className="text-sm font-semibold text-gray-900">{miDespliegue.creadoEn}</p>
+            <p className="text-sm font-semibold text-gray-900">{formatearFecha(createdAt)}</p>
           </div>
         </div>
       </BaseCard>

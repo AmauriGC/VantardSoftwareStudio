@@ -1,4 +1,10 @@
 from django.conf import settings
+import mimetypes
+from pathlib import Path
+from django.http import FileResponse, Http404
+from django.db.models import Count
+from django.db.models.functions import TruncDate
+from urllib.parse import urlparse
 
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -6,6 +12,7 @@ from rest_framework.pagination import PageNumberPagination
 
 from users.permissions import IsAdminUser
 from user_plans.models import UserPlan
+from system_logs.models import SystemLog
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
@@ -14,6 +21,82 @@ DEPLOYMENT_NOT_FOUND = 'Deployment no encontrado.'
 from .models import Deployment
 from .utils import generate_site_url
 from .serializers import ( DeploymentCreateSerializer, DeploymentUpdateSerializer, DeploymentOutputSerializer, AdminDeploymentOutputSerializer, )
+
+
+def _is_internal_site_referrer(request, domain: str) -> bool:
+    """
+    Detecta navegación interna del mismo sitio desplegado.
+    Si el referer ya pertenece a /sites/<domain>/..., no se considera nueva visita.
+    """
+    referrer = request.META.get('HTTP_REFERER', '')
+    if not referrer:
+        return False
+
+    parsed = urlparse(referrer)
+    ref_path = parsed.path or ''
+    expected_prefix = f'/sites/{domain}/'
+
+    return ref_path.startswith(expected_prefix)
+
+
+def serve_site_file(request, domain, file_path='index.html'):
+    """
+    Sirve archivos estáticos del sitio desplegado en /media/sites/<domain>/.
+    Solo expone deployments activos y protege contra path traversal.
+    """
+    deployment = Deployment.objects.filter(
+        domain=domain,
+        status=Deployment.Status.ACTIVE,
+        deleted_at__isnull=True,
+    ).first()
+
+    if not deployment:
+        raise Http404('Sitio no encontrado o inactivo.')
+
+    site_root = Path(settings.MEDIA_ROOT) / 'sites' / domain
+    if not site_root.exists() or not site_root.is_dir():
+        raise Http404('El sitio no tiene archivos publicados.')
+
+    # Algunos ZIP vienen con una carpeta contenedora única.
+    # Si no hay index en raíz, usar esa carpeta como raíz efectiva del sitio.
+    effective_root = site_root
+    root_index = site_root / 'index.html'
+    if not root_index.exists():
+        child_dirs = [p for p in site_root.iterdir() if p.is_dir()]
+        if len(child_dirs) == 1 and (child_dirs[0] / 'index.html').exists():
+            effective_root = child_dirs[0]
+
+    safe_relative = file_path or 'index.html'
+    target_path = (effective_root / safe_relative).resolve()
+
+    try:
+        target_path.relative_to(effective_root.resolve())
+    except ValueError as exc:
+        raise Http404('Ruta inválida.') from exc
+
+    if target_path.is_dir():
+        target_path = target_path / 'index.html'
+
+    if not target_path.exists() or not target_path.is_file():
+        # Fallback útil para rutas de SPA; no afecta sitios estáticos simples.
+        spa_index = effective_root / 'index.html'
+        if spa_index.exists() and spa_index.is_file():
+            target_path = spa_index
+        else:
+            raise Http404('Archivo no encontrado.')
+
+    content_type, _ = mimetypes.guess_type(str(target_path))
+    # Regla de negocio de visitas:
+    # - Solo cuenta páginas HTML del sitio publicado (/sites/<domain>/...).
+    # - No cuenta navegación interna por el propio sitio (header/menu interno).
+    # - No cuenta navegación interna del panel admin ni scroll/interacciones del frontend.
+    if target_path.suffix.lower() in {'.html', '.htm'}:
+        if not _is_internal_site_referrer(request, domain):
+            deployment.traffic_visit_count = (deployment.traffic_visit_count or 0) + 1
+            deployment.save(update_fields=['traffic_visit_count', 'updated_at'])
+            log_request(request, 'SITE_VISIT', 200, user_id=deployment.user_id)
+
+    return FileResponse(open(target_path, 'rb'), content_type=content_type or 'application/octet-stream')
 
   # ---------------------------------------------------------------------------
   # Listar y crear deployments del usuario autenticado
@@ -71,9 +154,22 @@ class DeploymentListView(APIView):
 
         serializer = DeploymentCreateSerializer(data=request.data)
         if not serializer.is_valid():
+            error_message = 'Datos inválidos.'
+            errors = serializer.errors
+
+            if isinstance(errors, dict) and errors:
+                first_key = next(iter(errors.keys()))
+                first_error = errors.get(first_key)
+                if isinstance(first_error, (list, tuple)) and first_error:
+                    error_message = str(first_error[0])
+                elif first_error:
+                    error_message = str(first_error)
+            elif isinstance(errors, (list, tuple)) and errors:
+                error_message = str(errors[0])
+
             log_request(request, 'USER_CREATE_DEPLOYMENT_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=error_message,
                 data=serializer.errors,
                 status=400,
             )
@@ -174,6 +270,117 @@ class DeploymentDetailView(APIView):
         deployment.soft_delete()
         log_request(request, 'USER_DELETE_DEPLOYMENT', 200)
         return success_response(message='Deployment eliminado correctamente.')
+
+
+class DeploymentLogsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        deployment = Deployment.objects.filter(
+            pk=pk,
+            user=request.user,
+            deleted_at__isnull=True,
+        ).first()
+        if not deployment:
+            return error_response(message='Deployment no encontrado.', status=404)
+
+        prefix = f'/sites/{deployment.domain}/'
+        logs_qs = SystemLog.objects.filter(
+            user_id=request.user.pk,
+            action='SITE_VISIT',
+            request_path__startswith=prefix,
+        ).order_by('-created_at')[:200]
+
+        logs = [
+            {
+                'id': item.id,
+                'deployment_id': deployment.id,
+                'path': item.request_path,
+                'method': item.http_method,
+                'client_ip': item.ip_address,
+                'status_code': item.status_code,
+                'created_at': item.created_at,
+            }
+            for item in logs_qs
+        ]
+
+        log_request(request, 'USER_GET_DEPLOYMENT_LOGS', 200)
+        return success_response(
+            data={'logs': logs},
+            message='Logs del deployment obtenidos correctamente.',
+        )
+
+
+class DeploymentTrafficView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        days = request.query_params.get('days', '7')
+        deployment_id = request.query_params.get('deployment_id')
+        try:
+            days_int = max(1, min(int(days), 90))
+        except ValueError:
+            days_int = 7
+
+        deployments_qs = Deployment.objects.filter(
+            user=request.user,
+            deleted_at__isnull=True,
+        )
+
+        if deployment_id:
+            try:
+                deployment_id_int = int(deployment_id)
+            except ValueError:
+                return error_response(message='deployment_id inválido.', status=400)
+
+            deployments_qs = deployments_qs.filter(pk=deployment_id_int)
+
+        domains = list(deployments_qs.values_list('domain', flat=True))
+
+        if not domains:
+            return success_response(
+                data={'traffic': []},
+                message='Sin datos de tráfico.',
+            )
+
+        logs_qs = SystemLog.objects.filter(
+            user_id=request.user.pk,
+            action='SITE_VISIT',
+        )
+
+        # Incluir únicamente rutas de los dominios del usuario.
+        domain_prefixes = [f'/sites/{d}/' for d in domains]
+        filtered_ids = []
+        for prefix in domain_prefixes:
+            filtered_ids.extend(list(logs_qs.filter(request_path__startswith=prefix).values_list('id', flat=True)))
+
+        if not filtered_ids:
+            return success_response(
+                data={'traffic': []},
+                message='Sin datos de tráfico.',
+            )
+
+        daily = (
+            SystemLog.objects.filter(id__in=filtered_ids)
+            .annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(visits=Count('id'))
+            .order_by('-day')[:days_int]
+        )
+
+        traffic = [
+            {
+                'date': row['day'],
+                'visits': row['visits'],
+            }
+            for row in reversed(list(daily))
+        ]
+
+        log_request(request, 'USER_GET_TRAFFIC', 200)
+        return success_response(
+            data={'traffic': traffic},
+            message='Visitas del sitio desplegado obtenidas correctamente.',
+        )
 
 
   # ---------------------------------------------------------------------------

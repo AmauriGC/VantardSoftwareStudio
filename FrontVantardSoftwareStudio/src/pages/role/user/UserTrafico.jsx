@@ -1,11 +1,15 @@
 import PropTypes from "prop-types";
 import { TrendingUp, ArrowUp, ArrowDown } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 
 import BaseCard from "../../../components/BaseCard";
-import { datosTrafico, despliegues, usuarioActual } from "../../../data/mockData";
+import DeploymentService from "./service/DeploymentService";
+import { showErrorAlert } from "../../../kernel/alerts";
 
 function formatearFechaCort(iso) {
+  if (!iso) return "Sin fecha";
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Sin fecha";
   return d.toLocaleDateString("es-MX", { weekday: "short", day: "2-digit", month: "short" });
 }
 
@@ -34,15 +38,101 @@ TendenciaIndicador.propTypes = {
 };
 
 export default function UserTrafico() {
-  const miDespliegue = despliegues.find((d) => d.usuarioId === usuarioActual.id);
+  const [traficoData, setTraficoData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deployments, setDeployments] = useState([]);
+  const [selectedDeploymentId, setSelectedDeploymentId] = useState(null);
 
-  const total = datosTrafico.reduce((acc, d) => acc + d.visitas, 0);
-  const maxVisitas = Math.max(...datosTrafico.map((d) => d.visitas));
-  const promedio = Math.round(total / datosTrafico.length);
+  useEffect(() => {
+    const cargarInicial = async () => {
+      try {
+        const resultDeploy = await DeploymentService.listMyDeployments();
+        if (resultDeploy.ok && resultDeploy.data.length > 0) {
+          setDeployments(resultDeploy.data);
+          setSelectedDeploymentId(resultDeploy.data[0].id);
+        } else {
+          setDeployments([]);
+          setSelectedDeploymentId(null);
+          setTraficoData([]);
+        }
+      } catch (error) {
+        console.error("Error cargando tráfico:", error);
+        showErrorAlert({
+          title: "Error",
+          text: "No se pudieron cargar los datos de tráfico",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const ultimo = datosTrafico.at(-1);
-  const penultimo = datosTrafico.at(-2);
-  const tendencia = ultimo && penultimo ? ultimo.visitas - penultimo.visitas : 0;
+    cargarInicial();
+  }, []);
+
+  useEffect(() => {
+    const cargarTrafico = async () => {
+      if (!selectedDeploymentId) {
+        setTraficoData([]);
+        return;
+      }
+
+      const resultTrafico = await DeploymentService.getTraffic(7, selectedDeploymentId);
+      if (resultTrafico.ok) {
+        setTraficoData(resultTrafico.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: resultTrafico.message || "No se pudieron cargar los datos de tráfico",
+        });
+      }
+    };
+
+    cargarTrafico();
+  }, [selectedDeploymentId]);
+
+  const selectedDeployment = useMemo(
+    () => deployments.find((d) => String(d.id) === String(selectedDeploymentId)) ?? null,
+    [deployments, selectedDeploymentId]
+  );
+
+  const normalizedTraffic = (traficoData || []).map((item, index) => {
+    const rawDate = item.date ?? item.fecha ?? item.day ?? null;
+    const parsed = rawDate ? new Date(rawDate) : null;
+    const isValidDate = parsed && !Number.isNaN(parsed.getTime());
+
+    return {
+      key: `${rawDate ?? "sin-fecha"}-${index}`,
+      date: isValidDate ? parsed.toISOString() : null,
+      visits: Number(item.visits ?? item.visitas ?? 0) || 0,
+    };
+  });
+
+  // Calcular valores
+  const total = normalizedTraffic.reduce((acc, d) => acc + d.visits, 0);
+  const maxVisitas = Math.max(
+    ...normalizedTraffic.map((d) => d.visits),
+    1
+  );
+  const promedio = normalizedTraffic.length > 0 ? Math.round(total / normalizedTraffic.length) : 0;
+
+  const ultimo = normalizedTraffic?.at?.(-1);
+  const penultimo = normalizedTraffic?.at?.(-2);
+  const tendencia = ultimo && penultimo ? ultimo.visits - penultimo.visits : 0;
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6 p-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Tráfico</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Cargando datos de tráfico...</p>
+        </div>
+        <BaseCard className="p-10 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600" />
+          <p className="text-sm text-gray-600">Cargando datos...</p>
+        </BaseCard>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -50,15 +140,40 @@ export default function UserTrafico() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Tráfico</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {miDespliegue ? `Visitas a ${miDespliegue.dominio}` : "Sin despliegue activo"}
+          {selectedDeployment
+            ? `Visitas por día de ${selectedDeployment.domain || selectedDeployment.dominio}`
+            : "Análisis de tráfico"}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          Se cuentan solo visitas al sitio publicado. No incluye navegación del panel ni scroll.
         </p>
       </div>
+
+      {deployments.length > 0 ? (
+        <BaseCard className="p-4">
+          <label htmlFor="trafico-deployment" className="text-xs font-medium text-gray-600 uppercase tracking-wider">
+            Sitio desplegado
+          </label>
+          <select
+            id="trafico-deployment"
+            className="mt-2 h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-900"
+            value={selectedDeploymentId ?? ""}
+            onChange={(e) => setSelectedDeploymentId(e.target.value)}
+          >
+            {deployments.map((dep) => (
+              <option key={dep.id} value={dep.id}>
+                {dep.domain || dep.dominio}
+              </option>
+            ))}
+          </select>
+        </BaseCard>
+      ) : null}
 
       {/* Resumen */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {/* Total */}
         <BaseCard className="p-5">
-          <p className="text-sm font-medium text-gray-600 mb-3">Total últimos 7 días</p>
+          <p className="text-sm font-medium text-gray-600 mb-3">Total últimos 7 días (visitas)</p>
           <p className="text-2xl font-bold text-gray-900">{total.toLocaleString("es-MX")}</p>
           <p className="text-xs text-gray-500 mt-1">visitas</p>
         </BaseCard>
@@ -89,16 +204,17 @@ export default function UserTrafico() {
           <h2 className="text-sm font-semibold text-gray-900">Visitas diarias</h2>
         </div>
         <div className="flex items-end gap-2 h-40">
-          {datosTrafico.map((d) => {
-            const altura = maxVisitas > 0 ? Math.round((d.visitas / maxVisitas) * 100) : 0;
+          {normalizedTraffic.map((d) => {
+            const visits = d.visits;
+            const altura = maxVisitas > 0 ? Math.round((visits / maxVisitas) * 100) : 0;
             return (
-              <div key={d.fecha} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                <span className="text-xs text-gray-500 font-medium">{d.visitas}</span>
+              <div key={d.key} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                <span className="text-xs text-gray-500 font-medium">{visits}</span>
                 <div className="w-full flex items-end justify-center" style={{ height: "100px" }}>
                   <div
                     className="w-full rounded-t-md bg-blue-500 transition-all hover:bg-blue-600"
                     style={{ height: `${altura}%`, minHeight: "4px" }}
-                    title={`${d.visitas} visitas`}
+                    title={`${visits} visitas`}
                   />
                 </div>
               </div>
@@ -106,10 +222,10 @@ export default function UserTrafico() {
           })}
         </div>
         <div className="flex gap-2 mt-2">
-          {datosTrafico.map((d) => (
-            <div key={d.fecha} className="flex-1 min-w-0">
+          {normalizedTraffic.map((d) => (
+            <div key={d.key} className="flex-1 min-w-0">
               <p className="text-center text-[10px] text-gray-400 truncate">
-                {formatearFechaCort(d.fecha)}
+                {formatearFechaCort(d.date)}
               </p>
             </div>
           ))}
@@ -136,20 +252,23 @@ export default function UserTrafico() {
             </tr>
           </thead>
           <tbody>
-            {[...datosTrafico].reverse().map((d) => (
-              <tr
-                key={d.fecha}
-                className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-              >
-                <td className="py-3 px-5 text-gray-900">{formatearFechaCort(d.fecha)}</td>
-                <td className="py-3 px-5 text-right font-medium text-gray-900">
-                  {d.visitas.toLocaleString("es-MX")}
-                </td>
-                <td className="py-3 px-5 text-right text-gray-500">
-                  {total > 0 ? ((d.visitas / total) * 100).toFixed(1) : "0.0"}%
-                </td>
-              </tr>
-            ))}
+            {[...normalizedTraffic].reverse().map((d) => {
+              const visits = d.visits;
+              return (
+                <tr
+                  key={`row-${d.key}`}
+                  className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+                >
+                  <td className="py-3 px-5 text-gray-900">{formatearFechaCort(d.date)}</td>
+                  <td className="py-3 px-5 text-right font-medium text-gray-900">
+                    {visits.toLocaleString("es-MX")}
+                  </td>
+                  <td className="py-3 px-5 text-right text-gray-500">
+                    {total > 0 ? ((visits / total) * 100).toFixed(1) : "0.0"}%
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </BaseCard>

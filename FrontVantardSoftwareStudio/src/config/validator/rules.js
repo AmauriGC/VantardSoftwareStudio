@@ -92,6 +92,38 @@ export function sameAs(getOtherValue, message = "Los campos no coinciden.") {
   };
 }
 
+export function hasUppercase(message = "Debe incluir al menos una letra mayúscula.") {
+  return {
+    name: "hasUppercase",
+    message,
+    validate: (value) => /[A-Z]/.test(String(value ?? "")),
+  };
+}
+
+export function hasLowercase(message = "Debe incluir al menos una letra minúscula.") {
+  return {
+    name: "hasLowercase",
+    message,
+    validate: (value) => /[a-z]/.test(String(value ?? "")),
+  };
+}
+
+export function hasNumber(message = "Debe incluir al menos un número.") {
+  return {
+    name: "hasNumber",
+    message,
+    validate: (value) => /\d/.test(String(value ?? "")),
+  };
+}
+
+export function hasSpecialChar(message = "Debe incluir al menos un carácter especial.") {
+  return {
+    name: "hasSpecialChar",
+    message,
+    validate: (value) => /[^A-Za-z0-9]/.test(String(value ?? "")),
+  };
+}
+
 export function validateField(rawValue, group, context, phase = "change") {
   const transforms = group?.transforms ?? [];
   const validators = group?.validators ?? [];
@@ -129,7 +161,7 @@ export const VALIDATION_GROUPS = {
   }),
 
   fullName: createGroup({
-    transforms: [trim, keepOnlyLettersAndSpaces, collapseSpaces],
+    transforms: [keepOnlyLettersAndSpaces, collapseSpaces],
     validators: [
       required("El nombre completo es obligatorio."),
       minLength(3, "El nombre completo debe tener al menos 3 caracteres."),
@@ -156,7 +188,14 @@ export const VALIDATION_GROUPS = {
 
   registerPassword: createGroup({
     transforms: [trim],
-    validators: [required("La contraseña es obligatoria.")],
+    validators: [
+      required("La contraseña es obligatoria."),
+      minLength(8, "Debe tener al menos 8 caracteres."),
+      hasUppercase(),
+      hasLowercase(),
+      hasNumber(),
+      hasSpecialChar(),
+    ],
   }),
 
   confirmPassword: createGroup({

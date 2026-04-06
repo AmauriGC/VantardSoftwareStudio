@@ -29,9 +29,23 @@ class CreatePlanChangeRequestView(APIView):
             context={'request': request},
         )
         if not serializer.is_valid():
+            error_message = 'Datos inválidos.'
+            errors = serializer.errors
+
+            # Prioriza el primer mensaje real de validación para UX más clara.
+            if isinstance(errors, dict) and errors:
+                first_key = next(iter(errors.keys()))
+                first_error = errors.get(first_key)
+                if isinstance(first_error, (list, tuple)) and first_error:
+                    error_message = str(first_error[0])
+                elif first_error:
+                    error_message = str(first_error)
+            elif isinstance(errors, (list, tuple)) and errors:
+                error_message = str(errors[0])
+
             log_request(request, 'PLAN_CHANGE_REQUEST_FAILED', 400)
             return error_response(
-                message='Datos inválidos.',
+                message=error_message,
                 data=serializer.errors,
                 status=400,
             )
