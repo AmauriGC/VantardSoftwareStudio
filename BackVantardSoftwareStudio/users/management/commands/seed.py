@@ -5,8 +5,8 @@ Crea los roles (Admin, User) y planes base (Free, Basic, Pro) si no existen.
 Es idempotente: puede ejecutarse múltiples veces sin duplicar registros.
 
 Uso:
-    python manage.py seed_initial_data
-    python manage.py seed_initial_data --verbosity 0   # silencioso
+    python manage.py seed
+    python manage.py seed --verbosity 0   # silencioso
 """
 
 from decimal import Decimal
