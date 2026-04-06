@@ -9,6 +9,7 @@ import BaseModal from "../../../components/BaseModal";
 import { confirmAction, showErrorAlert, showSuccessAlert } from "../../../kernel/alerts";
 import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 import { clearAuth, getAuth } from "../../auth/store/authStore";
+import { buildPasswordChecklist } from "../../../utils/formatters";
 import UserService from "./service/UserService";
 
 const NAME_PATTERN = /^[\p{L}\s'-]+$/u;
@@ -17,17 +18,6 @@ function sanitizeNameInput(value) {
   return String(value ?? "")
     .replaceAll(/[^\p{L}\s]/gu, "")
     .replaceAll(/\s{2,}/g, " ");
-}
-
-function buildPasswordChecklist(password) {
-  const value = String(password ?? "");
-  return [
-    { label: "Mínimo 8 caracteres", ok: value.length >= 8 },
-    { label: "Al menos una mayúscula", ok: /[A-Z]/.test(value) },
-    { label: "Al menos una minúscula", ok: /[a-z]/.test(value) },
-    { label: "Al menos un número", ok: /\d/.test(value) },
-    { label: "Al menos un carácter especial", ok: /[^A-Za-z0-9]/.test(value) },
-  ];
 }
 
 export default function UserPerfil() {
