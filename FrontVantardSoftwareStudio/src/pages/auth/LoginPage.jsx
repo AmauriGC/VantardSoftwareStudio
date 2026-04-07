@@ -80,23 +80,19 @@ export default function LoginPage() {
       return;
     }
 
+    if (!result.data?.accessToken || !result.data?.refreshToken) {
+      setError("El backend no devolvio los tokens esperados.");
+      showErrorAlert({
+        title: "No se pudo iniciar sesión",
+        text: "La respuesta del servidor no contiene tokens válidos.",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     setAuth(result.data);
     navigate(result.data.role === AUTH_ROLES.ADMIN ? "/admin" : "/user", { replace: true });
     setIsSubmitting(false);
-  };
-
-  const fillAdmin = () => {
-    if (isSubmitting) return;
-    emailField.setValue("admin@vantard.com", { shouldValidate: true });
-    passwordField.setValue("Admin1234!", { shouldValidate: true });
-    setError("");
-  };
-
-  const fillUser = () => {
-    if (isSubmitting) return;
-    emailField.setValue("test@test.com", { shouldValidate: true });
-    passwordField.setValue("Test1234!", { shouldValidate: true });
-    setError("");
   };
 
   return (
@@ -155,26 +151,6 @@ export default function LoginPage() {
           </Link>
         </p>
 
-        <div className="w-full flex items-center justify-center gap-2">
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillAdmin}
-            disabled={isSubmitting}
-          >
-            ADMIN
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="secondary"
-            className="h-9 px-3"
-            onClick={fillUser}
-            disabled={isSubmitting}
-          >
-            USER
-          </BaseButton>
-        </div>
       </form>
     </AuthLayout>
   );

@@ -8,17 +8,7 @@ import AuthLayout from "./components/AuthLayout";
 import { useValidatedField, VALIDATION_GROUPS } from "../../config/validator";
 import { showErrorAlert, showSuccessAlert } from "../../kernel/alerts";
 import AuthService from "./service/AuthService";
-
-function buildPasswordChecklist(password) {
-  const value = String(password ?? "");
-  return [
-    { label: "Mínimo 8 caracteres", ok: value.length >= 8 },
-    { label: "Al menos una mayúscula", ok: /[A-Z]/.test(value) },
-    { label: "Al menos una minúscula", ok: /[a-z]/.test(value) },
-    { label: "Al menos un número", ok: /\d/.test(value) },
-    { label: "Al menos un carácter especial", ok: /[^A-Za-z0-9]/.test(value) },
-  ];
-}
+import { buildPasswordChecklist } from "../../utils/formatters";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();

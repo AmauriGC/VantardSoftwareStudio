@@ -9,6 +9,7 @@ import BaseModal from "../../../components/BaseModal";
 import { confirmAction, showErrorAlert, showSuccessAlert } from "../../../kernel/alerts";
 import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 import { clearAuth, getAuth } from "../../auth/store/authStore";
+import { buildPasswordChecklist } from "../../../utils/formatters";
 import UserService from "./service/UserService";
 
 const NAME_PATTERN = /^[\p{L}\s'-]+$/u;
@@ -17,17 +18,6 @@ function sanitizeNameInput(value) {
   return String(value ?? "")
     .replaceAll(/[^\p{L}\s]/gu, "")
     .replaceAll(/\s{2,}/g, " ");
-}
-
-function buildPasswordChecklist(password) {
-  const value = String(password ?? "");
-  return [
-    { label: "Mínimo 8 caracteres", ok: value.length >= 8 },
-    { label: "Al menos una mayúscula", ok: /[A-Z]/.test(value) },
-    { label: "Al menos una minúscula", ok: /[a-z]/.test(value) },
-    { label: "Al menos un número", ok: /\d/.test(value) },
-    { label: "Al menos un carácter especial", ok: /[^A-Za-z0-9]/.test(value) },
-  ];
 }
 
 export default function UserPerfil() {
@@ -151,7 +141,7 @@ export default function UserPerfil() {
 
     if (!result.ok) {
       showErrorAlert({
-        title: "No se pudo cambiar la contrasena",
+        title: "No se pudo cambiar la contraseña",
         text: result.message || "Intenta nuevamente.",
       });
       setIsPasswordSubmitting(false);
@@ -166,7 +156,7 @@ export default function UserPerfil() {
     setShowNewPassword(false);
     setShowConfirmPassword(false);
     setIsPasswordSubmitting(false);
-    showSuccessAlert({ title: "Contrasena actualizada", text: "Se guardo tu nueva contrasena." });
+    showSuccessAlert({ title: "Contraseña actualizada", text: "Se guardó tu nueva contraseña." });
   };
 
   const handleEliminarCuenta = async () => {
@@ -174,8 +164,8 @@ export default function UserPerfil() {
 
     const confirmed = await confirmAction({
       title: "Eliminar cuenta",
-      text: "Esta accion desactivara tu cuenta. Deseas continuar?",
-      confirmText: "Si, eliminar",
+      text: "Esta acción desactivará tu cuenta. ¿Deseas continuar?",
+      confirmText: "Sí, eliminar",
       cancelText: "Cancelar",
     });
     if (!confirmed) return;
@@ -244,7 +234,7 @@ export default function UserPerfil() {
             <p className="text-sm text-gray-900">{profile?.last_name || "-"}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Correo electronico</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Correo electrónico</p>
             <p className="text-sm text-gray-900">{profile?.email || "-"}</p>
           </div>
           <div>
@@ -259,11 +249,11 @@ export default function UserPerfil() {
       <BaseCard className="p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Contrasena</h2>
-            <p className="text-sm text-gray-500">Actualiza tu contrasena de acceso.</p>
+            <h2 className="text-base font-semibold text-gray-900">Contraseña</h2>
+            <p className="text-sm text-gray-500">Actualiza tu contraseña de acceso.</p>
           </div>
           <BaseButton variant="secondary" onClick={() => setPasswordModalAbierto(true)}>
-            Cambiar contrasena
+            Cambiar contraseña
           </BaseButton>
         </div>
       </BaseCard>
@@ -272,7 +262,7 @@ export default function UserPerfil() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-red-700">Zona de riesgo</h2>
-            <p className="text-sm text-gray-600">Si eliminas tu cuenta, perderas acceso inmediatamente.</p>
+            <p className="text-sm text-gray-600">Si eliminas tu cuenta, perderás acceso inmediatamente.</p>
           </div>
           <BaseButton
             variant="secondary"
@@ -320,7 +310,7 @@ export default function UserPerfil() {
               onChange={(e) => setApellido(sanitizeNameInput(e.target.value))}
             />
           </div>
-          <BaseInput id="edit-email" label="Correo electronico" type="email" value={profile?.email || ""} disabled />
+          <BaseInput id="edit-email" label="Correo electrónico" type="email" value={profile?.email || ""} disabled />
         </div>
       </BaseModal>
 
@@ -332,7 +322,7 @@ export default function UserPerfil() {
           setShowNewPassword(false);
           setShowConfirmPassword(false);
         }}
-        title="Cambiar contrasena"
+        title="Cambiar contraseña"
         footer={
           <>
             <BaseButton
@@ -352,7 +342,7 @@ export default function UserPerfil() {
           <BaseInput
             id="current-password"
             type={showCurrentPassword ? "text" : "password"}
-            label="Contrasena actual"
+            label="Contraseña actual"
             value={currentPasswordField.value}
             onChange={currentPasswordField.onChange}
             onBlur={currentPasswordField.onBlur}
@@ -362,7 +352,7 @@ export default function UserPerfil() {
                 type="button"
                 onClick={() => setShowCurrentPassword((s) => !s)}
                 className="h-11 px-3 text-gray-500 hover:text-gray-700"
-                aria-label={showCurrentPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                aria-label={showCurrentPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -371,7 +361,7 @@ export default function UserPerfil() {
           <BaseInput
             id="new-password"
             type={showNewPassword ? "text" : "password"}
-            label="Nueva contrasena"
+            label="Nueva contraseña"
             value={newPasswordField.value}
             onChange={newPasswordField.onChange}
             onBlur={newPasswordField.onBlur}
@@ -381,7 +371,7 @@ export default function UserPerfil() {
                 type="button"
                 onClick={() => setShowNewPassword((s) => !s)}
                 className="h-11 px-3 text-gray-500 hover:text-gray-700"
-                aria-label={showNewPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                aria-label={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -403,7 +393,7 @@ export default function UserPerfil() {
           <BaseInput
             id="confirm-password"
             type={showConfirmPassword ? "text" : "password"}
-            label="Confirmar nueva contrasena"
+            label="Confirmar nueva contraseña"
             value={confirmPasswordField.value}
             onChange={confirmPasswordField.onChange}
             onBlur={confirmPasswordField.onBlur}
@@ -413,7 +403,7 @@ export default function UserPerfil() {
                 type="button"
                 onClick={() => setShowConfirmPassword((s) => !s)}
                 className="h-11 px-3 text-gray-500 hover:text-gray-700"
-                aria-label={showConfirmPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>

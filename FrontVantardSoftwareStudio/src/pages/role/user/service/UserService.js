@@ -51,7 +51,7 @@ export default class UserService {
 
   static async listPlans() {
     try {
-      const response = await axiosClient.get("/api/plans/");
+      const response = await axiosClient.get(ENDPOINTS.plans.list);
       const payload = response?.data?.data ?? response?.data ?? [];
       const plans = Array.isArray(payload)
         ? payload
@@ -67,7 +67,7 @@ export default class UserService {
 
   static async getPlanRequests() {
     try {
-      const response = await axiosClient.get("/api/plan-change-requests/my/");
+      const response = await axiosClient.get(ENDPOINTS.planChangeRequests.mine);
       const payload = response?.data?.data ?? response?.data ?? [];
       const rawRequests = Array.isArray(payload)
         ? payload
@@ -104,7 +104,7 @@ export default class UserService {
 
   static async requestPlanChange({ plan_id, months }) {
     try {
-      const response = await axiosClient.post("/api/plan-change-requests/", {
+      const response = await axiosClient.post(ENDPOINTS.planChangeRequests.list, {
         requested_plan_id: plan_id,
         reason: months ? `Solicitud por ${months} mes(es)` : "Solicitud de cambio de plan",
       });

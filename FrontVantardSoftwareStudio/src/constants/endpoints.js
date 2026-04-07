@@ -20,6 +20,9 @@ export const ENDPOINTS = {
   deployments: {
     list: "/api/deployments/",
     detail: (id) => `/api/deployments/${id}/`,
+    logs: (id) => `/api/deployments/${id}/logs/`,
+    traffic: "/api/deployments/traffic/",
+    trafficSummary: "/api/deployments/traffic/summary/",
   },
   deploymentVersions: {
     upload: (deploymentId) => `/api/deployment-versions/${deploymentId}/upload/`,
@@ -27,5 +30,12 @@ export const ENDPOINTS = {
     detail: (deploymentId, versionId) => `/api/deployment-versions/${deploymentId}/${versionId}/`,
     rollback: (deploymentId, versionId) =>
       `/api/deployment-versions/${deploymentId}/${versionId}/rollback/`,
+  },
+  plans: {
+    list: "/api/plans/",
+  },
+  planChangeRequests: {
+    list: "/api/plan-change-requests/",
+    mine: "/api/plan-change-requests/my/",
   },
 };

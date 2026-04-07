@@ -69,8 +69,7 @@ export default class DeploymentService {
 
   static async getLogs(deploymentId) {
     try {
-      const endpoint = `${ENDPOINTS.deployments.detail(deploymentId)}logs/`;
-      const response = await axiosClient.get(endpoint);
+      const response = await axiosClient.get(ENDPOINTS.deployments.logs(deploymentId));
       const payload = response?.data?.data ?? {};
       const logs = (payload.logs ?? []).map((item) => ({
         id: item.id,
@@ -90,7 +89,7 @@ export default class DeploymentService {
 
   static async getTraffic(days = 7, deploymentId = null) {
     try {
-      const response = await axiosClient.get("/api/deployments/traffic/", {
+      const response = await axiosClient.get(ENDPOINTS.deployments.traffic, {
         params: {
           days,
           ...(deploymentId ? { deployment_id: deploymentId } : {}),
@@ -110,7 +109,7 @@ export default class DeploymentService {
 
   static async getTrafficSummary() {
     try {
-      const response = await axiosClient.get("/api/deployments/traffic/summary/");
+      const response = await axiosClient.get(ENDPOINTS.deployments.trafficSummary);
       const payload = response?.data?.data ?? {};
       return { ok: true, data: payload };
     } catch (error) {
