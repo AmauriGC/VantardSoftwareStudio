@@ -121,4 +121,21 @@ class PlanDetailView(APIView):
             data=PlanOutputSerializer(plan).data,
             message='Plan actualizado correctamente.',
         )
+
+
+# ---------------------------------------------------------------------------
+# Listado de planes (admin: todos los no eliminados)
+# ---------------------------------------------------------------------------
+
+class AdminPlanListView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        plans = Plan.objects.filter(deleted_at__isnull=True)
+        serializer = PlanOutputSerializer(plans, many=True)
+        log_request(request, 'ADMIN_PLAN_LIST', 200)
+        return success_response(
+            data={'plans': serializer.data},
+            message='Planes obtenidos correctamente.',
+        )
     
