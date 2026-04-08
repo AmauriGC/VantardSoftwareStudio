@@ -10,19 +10,13 @@ from user_plans.models import UserPlan
 
 class CreatePlanChangeRequestSerializer(serializers.Serializer):
     requested_plan_id = serializers.IntegerField()
+    months            = serializers.IntegerField(min_value=1, max_value=24)
     reason            = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
-
-    def validate_requested_plan_id(self, value):
-        try:
-            Plan.objects.get(pk=value, status=Plan.Status.ACTIVE, deleted_at__isnull=True)
-        except Plan.DoesNotExist:
-            raise serializers.ValidationError('El plan solicitado no existe o no está disponible.')
-        return value
 
     def validate(self, attrs):
         user = self.context['request'].user
 
-          # El usuario debe tener un plan activo para solicitar un cambio
+        # El usuario debe tener un plan activo para solicitar un cambio
         active_plan = UserPlan.objects.filter(
             user=user,
             status=UserPlan.Status.ACTIVE,
@@ -31,11 +25,7 @@ class CreatePlanChangeRequestSerializer(serializers.Serializer):
         if not active_plan:
             raise serializers.ValidationError('No tienes una suscripción activa para cambiar.')
 
-          # No puede solicitar el mismo plan que ya tiene
-        if active_plan.plan_id == attrs['requested_plan_id']:
-            raise serializers.ValidationError('Ya tienes este plan activo.')
-
-          # No puede tener una solicitud pendiente o aprobada al mismo tiempo
+        # No puede tener una solicitud pendiente o aprobada al mismo tiempo
         has_pending = PlanChangeRequest.objects.filter(
             user=user,
             status__in=[PlanChangeRequest.Status.PENDING, PlanChangeRequest.Status.APPROVED],
@@ -43,8 +33,26 @@ class CreatePlanChangeRequestSerializer(serializers.Serializer):
         ).exists()
         if has_pending:
             raise serializers.ValidationError('Ya tienes una solicitud de cambio de plan en proceso.')
+        
+        # Calcula el total en backend para evitar manipulaciones desde el front.
+        try:
+            plan = Plan.objects.get(
+                pk=attrs['requested_plan_id'],
+                status=Plan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+        except Plan.DoesNotExist:
+            raise serializers.ValidationError('El plan solicitado no existe o no está disponible.')
 
-        attrs['current_plan'] = active_plan
+        months = attrs.get('months')
+        if months is None:
+            raise serializers.ValidationError('Debes indicar el número de meses.')
+
+        total = UserPlan.calculate_total(float(plan.price), int(months))
+
+        attrs['current_plan']     = active_plan
+        attrs['months_requested'] = int(months)
+        attrs['total_price']      = total
         return attrs
 
 
@@ -56,6 +64,15 @@ class PlanChangeRequestOutputSerializer(serializers.ModelSerializer):
     current_plan_name   = serializers.CharField(source='current_plan.plan.name')
     requested_plan_name = serializers.CharField(source='requested_plan.name')
     reviewed_by_email   = serializers.SerializerMethodField()
+    months              = serializers.IntegerField(
+        source='months_requested', read_only=True, allow_null=True
+    )
+    total_price         = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model  = PlanChangeRequest
@@ -63,6 +80,8 @@ class PlanChangeRequestOutputSerializer(serializers.ModelSerializer):
             'id',
             'current_plan_name',
             'requested_plan_name',
+            'months',
+            'total_price',
             'reason',
             'status',
             'reviewed_by_email',
@@ -85,6 +104,15 @@ class AdminPlanChangeRequestOutputSerializer(serializers.ModelSerializer):
     current_plan_name   = serializers.CharField(source='current_plan.plan.name')
     requested_plan_name = serializers.CharField(source='requested_plan.name')
     reviewed_by_email   = serializers.SerializerMethodField()
+    months              = serializers.IntegerField(
+        source='months_requested', read_only=True, allow_null=True
+    )
+    total_price         = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model  = PlanChangeRequest
@@ -94,6 +122,8 @@ class AdminPlanChangeRequestOutputSerializer(serializers.ModelSerializer):
             'user_name',
             'current_plan_name',
             'requested_plan_name',
+            'months',
+            'total_price',
             'reason',
             'status',
             'reviewed_by_email',
@@ -107,5 +137,3 @@ class AdminPlanChangeRequestOutputSerializer(serializers.ModelSerializer):
 
     def get_reviewed_by_email(self, obj):
         return obj.reviewed_by.email if obj.reviewed_by else None
-    
-    

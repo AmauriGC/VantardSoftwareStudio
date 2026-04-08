@@ -33,9 +33,16 @@ export const ENDPOINTS = {
   },
   plans: {
     list: "/api/plans/",
+    adminList: "/api/plans/admin/",
+    detail: (id) => `/api/plans/${id}/`,
   },
   planChangeRequests: {
     list: "/api/plan-change-requests/",
     mine: "/api/plan-change-requests/my/",
+    cancel: (id) => `/api/plan-change-requests/${id}/cancel/`,
+    apply: (id) => `/api/plan-change-requests/${id}/apply/`,
+    adminList: "/api/plan-change-requests/admin/all/",
+    adminApprove: (id) => `/api/plan-change-requests/admin/${id}/approve/`,
+    adminReject: (id) => `/api/plan-change-requests/admin/${id}/reject/`,
   },
 };

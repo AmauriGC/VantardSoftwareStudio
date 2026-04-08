@@ -35,6 +35,22 @@ class PlanChangeRequest(models.Model):
         help_text='Plan al que el usuario desea cambiar.'
     )
 
+    months_requested = models.IntegerField(
+        db_column='months_requested',
+        help_text='Meses solicitados para el nuevo plan. Ej: 1, 3, 6, 12.',
+        null=True,
+        blank=True,
+    )
+
+    total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        db_column='total_price',
+        help_text='Monto total estimado para la solicitud (plan_price * meses).',
+        null=True,
+        blank=True,
+    )
+
     reason = models.TextField(
         blank=True,
         default='',
