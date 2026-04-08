@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 
 from pathlib import Path
+import logging.config
 from datetime import timedelta
 from decouple import config, Csv
 from loguru import logger
@@ -73,6 +74,8 @@ LOGGING = {
         'level': 'DEBUG',
     },
 }
+
+logging.config.dictConfig(LOGGING)
 
 
 def _env_bool(value: str | None, default: bool = False) -> bool:
