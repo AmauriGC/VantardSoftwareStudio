@@ -1,6 +1,7 @@
 import { ENDPOINTS } from "../../../constants/endpoints";
 import { normalizeAxiosError, axiosClient } from "../../../kernel/axiosClient";
 import { AUTH_EMAILS, AUTH_ROLES } from "../constants/authConstants";
+import { encryptPayload, decryptPayload } from "../../../kernel/crypto";
 
 function normalizeRole(roleName, email) {
   const normalizedRoleName = String(roleName ?? "").trim().toLowerCase();
@@ -175,15 +176,21 @@ export default class AuthService {
     }
 
     try {
-      const response = await axiosClient.post(ENDPOINTS.auth.passwordResetConfirm, {
-        uid: normalizedUid,
-        token: normalizedToken,
-        new_password: normalizedNewPassword,
+      const ciphertext = encryptPayload({
+        uid:              normalizedUid,
+        token:            normalizedToken,
+        new_password:     normalizedNewPassword,
         confirm_password: normalizedConfirmPassword,
       });
+
+      const response = await axiosClient.post(ENDPOINTS.auth.passwordResetConfirm, {
+        ciphertext,
+      });
+
+      const decrypted = decryptPayload(response?.data?.ciphertext);
       return {
         ok: true,
-        message: response?.data?.message ?? "Contraseña restablecida correctamente.",
+        message: decrypted?.message ?? "Contraseña restablecida correctamente.",
       };
     } catch (error) {
       const normalized = normalizeAxiosError(error);

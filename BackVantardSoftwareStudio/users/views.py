@@ -14,6 +14,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
+from .crypto import decrypt_payload
+from .renders import AESRenderer
 from .models import User
 from .serializers import (
     UserRegisterSerializer,
@@ -466,9 +468,25 @@ class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'password_reset_confirm'
+    renderer_classes = [AESRenderer]
 
     def post(self, request):
-        serializer = PasswordResetConfirmSerializer(data=request.data)
+        ciphertext = request.data.get('ciphertext')
+        if not ciphertext:
+            return error_response(
+                message='Se esperaba un payload cifrado.',
+                status=400,
+            )
+
+        try:
+            decrypted = decrypt_payload(ciphertext)
+        except Exception:
+            return error_response(
+                message='No se pudo descifrar el payload.',
+                status=400,
+            )
+
+        serializer = PasswordResetConfirmSerializer(data=decrypted)
         if not serializer.is_valid():
             return error_response(
                 message='Datos inválidos.',
