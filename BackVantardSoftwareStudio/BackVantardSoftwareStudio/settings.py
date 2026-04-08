@@ -14,9 +14,65 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 from decouple import config, Csv
+from loguru import logger
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGGING_CONFIG = None
+
+LOG_FORMAT = (
+    '{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{function}:{line} - {message}'
+)
+
+logger.configure(
+    handlers=[
+        {
+            'sink': str(LOG_DIR / 'debug.log'),
+            'level': 'DEBUG',
+            'rotation': '10 MB',
+            'retention': '7 days',
+            'compression': 'zip',
+            'format': LOG_FORMAT,
+        },
+        {
+            'sink': str(LOG_DIR / 'error.log'),
+            'level': 'ERROR',
+            'rotation': '10 MB',
+            'retention': '7 days',
+            'compression': 'zip',
+            'backtrace': True,
+            'diagnose': True,
+            'format': LOG_FORMAT,
+        },
+        {
+            'sink': str(LOG_DIR / 'security.log'),
+            'level': 'INFO',
+            'rotation': '10 MB',
+            'retention': '30 days',
+            'compression': 'zip',
+            'format': LOG_FORMAT,
+            'filter': lambda record: record['extra'].get('security') is True,
+        },
+    ]
+)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'loguru': {
+            'class': 'kernel.interceptor.InterceptorHandler',
+        },
+    },
+    'root': {
+        'handlers': ['loguru'],
+        'level': 'DEBUG',
+    },
+}
 
 
 def _env_bool(value: str | None, default: bool = False) -> bool:
