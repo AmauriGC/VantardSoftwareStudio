@@ -83,6 +83,8 @@ export default class UserService {
         pending: "Pendiente",
         approved: "Aprobado",
         rejected: "Rechazado",
+        completed: "Aplicada",
+        cancelled: "Cancelada",
       };
 
       const requests = rawRequests.map((item) => ({
@@ -106,8 +108,29 @@ export default class UserService {
     try {
       const response = await axiosClient.post(ENDPOINTS.planChangeRequests.list, {
         requested_plan_id: plan_id,
+        months,
         reason: months ? `Solicitud por ${months} mes(es)` : "Solicitud de cambio de plan",
       });
+      return { ok: true, data: response?.data?.data ?? null };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async cancelPlanRequest(id) {
+    try {
+      await axiosClient.delete(ENDPOINTS.planChangeRequests.cancel(id));
+      return { ok: true };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
+  static async applyPlanRequest(id) {
+    try {
+      const response = await axiosClient.post(ENDPOINTS.planChangeRequests.apply(id));
       return { ok: true, data: response?.data?.data ?? null };
     } catch (error) {
       const normalized = normalizeAxiosError(error);

@@ -239,10 +239,9 @@ export default function UserPlan() {
                 <BaseButton
                   className="w-full"
                   variant={esActual ? "secondary" : "primary"}
-                  disabled={esActual}
                   onClick={() => abrirModal(p)}
                 >
-                  {esActual ? "Plan actual" : "Solicitar upgrade"}
+                  {esActual ? "Renovar plan" : "Solicitar cambio"}
                 </BaseButton>
               </BaseCard>
             );
@@ -259,11 +258,21 @@ export default function UserPlan() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {["Plan solicitado", "Tipo", "Meses", "Total", "Estado", "Fecha"].map((col) => (
+                {[
+                  "Plan solicitado",
+                  "Tipo",
+                  "Meses",
+                  "Total",
+                  "Estado",
+                  "Fecha",
+                  "Acciones",
+                ].map((col) => (
                   <th
                     key={col}
                     className={`py-3 px-5 text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                      col === "Total" || col === "Meses" ? "text-right" : "text-left"
+                      col === "Total" || col === "Meses" || col === "Acciones"
+                        ? "text-right"
+                        : "text-left"
                     }`}
                   >
                     {col}
@@ -291,6 +300,65 @@ export default function UserPlan() {
                     </span>
                   </td>
                   <td className="py-3 px-5 text-gray-400">{s.creadoEn}</td>
+                  <td className="py-3 px-5">
+                    <div className="flex items-center justify-end gap-2">
+                      {s.estado === "Pendiente" && (
+                        <BaseButton
+                          variant="secondary"
+                          className="h-7 px-2.5 text-xs"
+                          onClick={async () => {
+                            const result = await UserService.cancelPlanRequest(s.id);
+                            if (result.ok) {
+                              const refreshed = await UserService.getPlanRequests();
+                              if (refreshed.ok) {
+                                setMisSolicitudes(refreshed.data);
+                              }
+                              showSuccessAlert({
+                                title: "Solicitud cancelada",
+                                text: "La solicitud fue cancelada correctamente.",
+                              });
+                            } else {
+                              showErrorAlert({
+                                title: "Error",
+                                text: result.message || "No se pudo cancelar la solicitud.",
+                              });
+                            }
+                          }}
+                        >
+                          Cancelar
+                        </BaseButton>
+                      )}
+                      {s.estado === "Aprobado" && (
+                        <BaseButton
+                          className="h-7 px-2.5 text-xs"
+                          onClick={async () => {
+                            const result = await UserService.applyPlanRequest(s.id);
+                            if (result.ok) {
+                              const [refProfile, refPlans, refRequests] = await Promise.all([
+                                UserService.getProfile(),
+                                UserService.listPlans(),
+                                UserService.getPlanRequests(),
+                              ]);
+                              if (refProfile.ok) setProfile(refProfile.data);
+                              if (refPlans.ok) setPlanes(refPlans.data);
+                              if (refRequests.ok) setMisSolicitudes(refRequests.data);
+                              showSuccessAlert({
+                                title: "Solicitud aplicada",
+                                text: "Tu nuevo plan ya está activo.",
+                              });
+                            } else {
+                              showErrorAlert({
+                                title: "Error",
+                                text: result.message || "No se pudo aplicar la solicitud.",
+                              });
+                            }
+                          }}
+                        >
+                          Aplicar ahora
+                        </BaseButton>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

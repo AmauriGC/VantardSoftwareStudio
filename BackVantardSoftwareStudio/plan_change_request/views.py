@@ -56,6 +56,8 @@ class CreatePlanChangeRequestView(APIView):
             current_plan   = data['current_plan'],
             requested_plan = Plan.objects.get(pk=data['requested_plan_id']),
             reason         = data.get('reason', ''),
+            months_requested = data.get('months_requested'),
+            total_price      = data.get('total_price'),
             status         = PlanChangeRequest.Status.PENDING,
         )
 
@@ -129,6 +131,67 @@ class CancelPlanChangeRequestView(APIView):
 
 
   # ---------------------------------------------------------------------------
+  # Usuario – aplicar ahora una solicitud aprobada
+  # ---------------------------------------------------------------------------
+
+class ApplyPlanChangeRequestNowView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            change_request = PlanChangeRequest.objects.select_related(
+                'current_plan', 'requested_plan', 'user'
+            ).get(
+                pk=pk,
+                user=request.user,
+                deleted_at__isnull=True,
+            )
+        except PlanChangeRequest.DoesNotExist:
+            return error_response(message=SOLICITUD_NOT_FOUND, status=404)
+
+        if change_request.status != PlanChangeRequest.Status.APPROVED:
+            return error_response(
+                message='Solo puedes aplicar solicitudes aprobadas.',
+                status=400,
+            )
+
+        if change_request.is_completed:
+            return error_response(
+                message='La solicitud ya fue aplicada.',
+                status=400,
+            )
+
+        current_plan = change_request.current_plan
+        if current_plan and not current_plan.is_deleted and current_plan.status == UserPlan.Status.ACTIVE:
+            # El usuario acepta perder los días restantes del plan actual.
+            current_plan.soft_delete()
+
+        now     = timezone.now()
+        months  = change_request.months_requested or 1
+        price   = float(change_request.requested_plan.price)
+        total   = change_request.total_price or UserPlan.calculate_total(price, int(months))
+        expiry  = now + timedelta(days=30 * int(months))
+
+        UserPlan.objects.create(
+            user             = change_request.user,
+            plan             = change_request.requested_plan,
+            purchase_date    = now,
+            expiration_date  = expiry,
+            months_purchased = int(months),
+            total_price_paid = total,
+            status           = UserPlan.Status.ACTIVE,
+        )
+
+        change_request.complete()
+
+        log_request(request, 'PLAN_CHANGE_REQUEST_APPLIED_NOW', 200)
+        return success_response(
+            data=PlanChangeRequestOutputSerializer(change_request).data,
+            message='Solicitud aplicada correctamente. Tu nuevo plan ya está activo.',
+        )
+
+
+  # ---------------------------------------------------------------------------
   # Admin – listar todas las solicitudes
   # ---------------------------------------------------------------------------
 
@@ -171,6 +234,12 @@ class AdminPlanChangeRequestListView(APIView):
   # Admin – aprobar solicitud (aplica el cambio de plan automáticamente)
   # ---------------------------------------------------------------------------
 
+    # ---------------------------------------------------------------------------
+    # Admin – aprobar solicitud (solo cambia el status a "approved")
+    # La aplicación del nuevo plan la hace el evento de BD al vencer
+    # el plan actual o el endpoint ApplyPlanChangeRequestNowView.
+    # ---------------------------------------------------------------------------
+
 class AdminApprovePlanChangeRequestView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
@@ -188,37 +257,15 @@ class AdminApprovePlanChangeRequestView(APIView):
                 status=400,
             )
 
-          # 1. Aprobar la solicitud
+        # Aprobar la solicitud pero SIN aplicar aún el nuevo plan.
+        # La aplicación se realizará ya sea cuando venza el plan actual
+        # (evento en base de datos) o cuando el usuario decida aplicar ahora.
         change_request.approve(request.user)
-
-          # 2. Cancelar el plan activo actual del usuario
-        change_request.current_plan.soft_delete()
-
-          # 3. Crear el nuevo UserPlan con el plan solicitado
-        now             = timezone.now()
-        months          = change_request.current_plan.months_purchased
-        expiration_date = now + timedelta(days=30 * months)
-        total_price     = UserPlan.calculate_total(
-            float(change_request.requested_plan.price), months
-        )
-
-        UserPlan.objects.create(
-            user             = change_request.user,
-            plan             = change_request.requested_plan,
-            purchase_date    = now,
-            expiration_date  = expiration_date,
-            months_purchased = months,
-            total_price_paid = total_price,
-            status           = UserPlan.Status.ACTIVE,
-        )
-
-          # 4. Marcar la solicitud como completada
-        change_request.complete()
 
         log_request(request, 'ADMIN_APPROVE_PLAN_CHANGE', 200)
         return success_response(
             data=AdminPlanChangeRequestOutputSerializer(change_request).data,
-            message='Solicitud aprobada y plan actualizado correctamente.',
+            message='Solicitud aprobada correctamente.',
         )
 
 

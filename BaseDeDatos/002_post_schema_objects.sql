@@ -42,16 +42,70 @@ DELIMITER ;
 -- ========================
 -- EVENTS
 -- ========================
+DELIMITER $$
 
 CREATE EVENT IF NOT EXISTS `event_expire_user_plans`
 ON SCHEDULE EVERY 1 DAY
 DO
+BEGIN
+  -- 1) Expirar planes vencidos y bloquear despliegues asociados
   UPDATE user_plans up
   JOIN deployments d ON up.user_id = d.user_id
   SET up.status = 'expired',
       d.status = 'blocked'
   WHERE up.expiration_date < NOW()
     AND up.status = 'active';
+
+  -- 2) Aplicar automáticamente solicitudes aprobadas cuyo current_plan ya expiró
+  INSERT INTO user_plans (
+      user_id,
+      plan_id,
+      purchase_date,
+      expiration_date,
+      months_purchased,
+      total_price_paid,
+      status,
+      created_at,
+      updated_at
+  )
+  SELECT
+      r.user_id,
+      r.requested_plan_id,
+      NOW() AS purchase_date,
+      DATE_ADD(NOW(), INTERVAL IFNULL(r.months_requested, 1) * 30 DAY) AS expiration_date,
+      IFNULL(r.months_requested, 1) AS months_purchased,
+      IFNULL(r.total_price, 0) AS total_price_paid,
+      'active' AS status,
+      NOW() AS created_at,
+      NOW() AS updated_at
+  FROM plan_change_requests r
+  JOIN user_plans up ON r.current_plan_id = up.id
+  WHERE r.status = 'approved'
+    AND r.deleted_at IS NULL
+    AND r.completed_at IS NULL
+    AND up.status = 'expired'
+    AND up.deleted_at IS NULL
+    AND NOT EXISTS (
+      SELECT 1
+      FROM user_plans up2
+      WHERE up2.user_id = r.user_id
+        AND up2.status = 'active'
+        AND up2.deleted_at IS NULL
+    );
+
+  UPDATE plan_change_requests r
+  JOIN user_plans up ON r.current_plan_id = up.id
+  SET r.status = 'completed',
+      r.completed_at = NOW(),
+      r.updated_at = NOW()
+  WHERE r.status = 'approved'
+    AND r.deleted_at IS NULL
+    AND r.completed_at IS NULL
+    AND up.status = 'expired'
+    AND up.deleted_at IS NULL;
+END$$
+DELIMITER ;
+
 
 CREATE EVENT IF NOT EXISTS `event_monthly_traffic_reset`
 ON SCHEDULE EVERY 1 MONTH
