@@ -13,6 +13,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
+from loguru import logger
 
 from .crypto import decrypt_payload
 from .renders import AESRenderer
@@ -38,6 +39,14 @@ from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
 INVALID_DATA_MSG = 'Datos inválidos.'
+security_logger = logger.bind(security=True)
+
+
+def _get_client_ip(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', 'unknown')
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +133,7 @@ class LoginView(APIView):
     throttle_scope = 'auth_login'
 
     def post(self, request):
+        ip_address = _get_client_ip(request)
         serializer = UserLoginSerializer(data=request.data)
         if not serializer.is_valid():
             log_request(request, 'USER_LOGIN_FAILED', 400)
@@ -141,6 +151,11 @@ class LoginView(APIView):
         )
 
         if user is None:
+            security_logger.warning(
+                'Login fallido - credenciales incorrectas | email={} ip={}',
+                data['email'],
+                ip_address,
+            )
             log_request(request, 'USER_LOGIN_FAILED', 401)
             return error_response(
                 message='Credenciales incorrectas.',
@@ -148,6 +163,12 @@ class LoginView(APIView):
             )
 
         if not user.is_active or user.status == User.Status.BLOCKED:
+            security_logger.warning(
+                'Login bloqueado por estado de cuenta | user_id={} email={} ip={}',
+                user.pk,
+                user.email,
+                ip_address,
+            )
             log_request(request, 'USER_LOGIN_BLOCKED', 403, user_id=user.pk)
             return error_response(
                 message='Tu cuenta está suspendida o bloqueada.',
@@ -155,6 +176,7 @@ class LoginView(APIView):
             )
 
         refresh = RefreshToken.for_user(user)
+        logger.info('Login exitoso | user_id={} email={}', user.pk, user.email)
         log_request(request, 'USER_LOGIN', 200, user_id=user.pk)
 
         return success_response(
@@ -313,6 +335,7 @@ class PasswordResetRequestView(APIView):
     throttle_scope = 'password_reset_request'
 
     def post(self, request):
+        ip_address = _get_client_ip(request)
         serializer = PasswordResetRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
@@ -454,11 +477,25 @@ class PasswordResetRequestView(APIView):
                 email_msg.attach_alternative(html_content, 'text/html')
                 email_msg.send(fail_silently=False)
             except Exception:
+                logger.exception(
+                    'Error al enviar correo de recuperación por SMTP | user_id={} email={}',
+                    user.pk,
+                    user.email,
+                )
                 log_request(request, 'PASSWORD_RESET_REQUEST_EMAIL_FAILED', 500, user_id=user.pk)
                 return success_response(message=generic_message)
 
+            security_logger.info(
+                'Correo de recuperación enviado exitosamente | user_id={} email={}',
+                user.pk,
+                user.email,
+            )
             log_request(request, 'PASSWORD_RESET_REQUEST', 200, user_id=user.pk)
         else:
+            security_logger.warning(
+                'Solicitud de restablecimiento ignorada | ip={}',
+                ip_address,
+            )
             log_request(request, 'PASSWORD_RESET_REQUEST_IGNORED', 200)
 
         return success_response(message=generic_message)
@@ -471,6 +508,7 @@ class PasswordResetConfirmView(APIView):
     renderer_classes = [AESRenderer]
 
     def post(self, request):
+        ip_address = _get_client_ip(request)
         ciphertext = request.data.get('ciphertext')
         if not ciphertext:
             return error_response(
@@ -481,6 +519,8 @@ class PasswordResetConfirmView(APIView):
         try:
             decrypted = decrypt_payload(ciphertext)
         except Exception:
+            logger.exception('Error al descifrar payload de restablecimiento | ip={}', ip_address)
+            security_logger.warning('Payload de restablecimiento inválido o corrupto | ip={}', ip_address)
             return error_response(
                 message='No se pudo descifrar el payload.',
                 status=400,
@@ -504,6 +544,16 @@ class PasswordResetConfirmView(APIView):
                 is_active=True,
             ).select_related('role').first()
         except Exception:
+            logger.exception(
+                'Error al decodificar payload de restablecimiento | uid={} ip={}',
+                data.get('uid'),
+                ip_address,
+            )
+            security_logger.warning(
+                'Payload de restablecimiento inválido o corrupto | uid={} ip={}',
+                data.get('uid'),
+                ip_address,
+            )
             user = None
 
         if (
@@ -511,6 +561,11 @@ class PasswordResetConfirmView(APIView):
             or (user.role and str(user.role.role_name).strip().lower() == 'admin')
             or not default_token_generator.check_token(user, data['token'])
         ):
+            security_logger.warning(
+                'Token de restablecimiento inválido o expirado | uid={} ip={}',
+                data.get('uid'),
+                ip_address,
+            )
             return error_response(
                 message='El enlace es inválido o ya expiró.',
                 status=400,
@@ -518,6 +573,11 @@ class PasswordResetConfirmView(APIView):
 
         user.set_password(data['new_password'])
         user.save(update_fields=['password', 'updated_at'])
+        security_logger.info(
+            'Contraseña restablecida exitosamente | user_id={} email={}',
+            user.pk,
+            user.email,
+        )
         log_request(request, 'PASSWORD_RESET_CONFIRM', 200, user_id=user.pk)
 
         return success_response(message='Contraseña restablecida correctamente.')
