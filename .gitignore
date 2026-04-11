@@ -39,9 +39,7 @@ db.sqlite3-journal
 staticfiles/
 media/
 
-# Migraciones (ignorar archivos generados, pero mantener el paquete)
-BackVantardSoftwareStudio/**/migrations/*.py
-!BackVantardSoftwareStudio/**/migrations/__init__.py
+# Migraciones — se versiona para que Render pueda ejecutar migrate en build.sh
 
 # --- Node / Vite ---
 node_modules/
