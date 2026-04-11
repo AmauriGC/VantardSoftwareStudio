@@ -3,6 +3,8 @@
 export const PATTERNS = {
   // Unicode letters (incluye acentos, ñ, etc.)
   ONLY_LETTERS: /\p{L}+/gu,
+  // Nombres de persona: letras (incluye acentos), espacios, punto, apostrofe y guion
+  PERSON_NAME: /^[\p{L}\s'.-]+$/u,
   EMAIL:
     // No pretende cubrir 100% RFC; suficiente para validación UX
     // [^\s@]+ en el dominio permite subdominios como utez.edu.mx

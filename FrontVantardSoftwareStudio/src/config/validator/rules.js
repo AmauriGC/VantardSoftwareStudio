@@ -60,6 +60,12 @@ export function allowedEmailDomains(domains, message = "Dominio de correo no per
       .filter(Boolean)
   );
 
+  const allowedInitials = new Set(
+    Array.from(allowed)
+      .map((d) => d[0])
+      .filter(Boolean)
+  );
+
   return {
     name: "allowedEmailDomains",
     message,
@@ -67,12 +73,24 @@ export function allowedEmailDomains(domains, message = "Dominio de correo no per
       const v = String(value ?? "").trim().toLowerCase();
       if (!v) return true;
 
-      // Mismo criterio de no-agresivo mientras escribe
+      const atIndex = v.indexOf("@");
+      if (atIndex === -1) return true;
+
+      const domainPart = v.slice(atIndex + 1);
+
+      // Comportamiento más reactivo mientras escribe:
       if (phase === "change") {
-        if (!v.includes("@")) return true;
-        const atIndex = v.indexOf("@");
-        const domain = v.slice(atIndex + 1);
-        if (!domain.includes(".")) return true;
+        if (!domainPart) return true;
+
+        const firstChar = domainPart[0];
+        // Si la primera letra del dominio no coincide con ninguna de las iniciales
+        // de los dominios permitidos (utez.edu.mx, gmail.com => u/g), marcamos error inmediato.
+        if (!allowedInitials.has(firstChar)) {
+          return false;
+        }
+
+        // Mientras no haya punto en el dominio, dejamos que emailFormat maneje el resto.
+        if (!domainPart.includes(".")) return true;
       }
 
       // Si el formato base aún no pasa, no forzamos este mensaje; lo manejará emailFormat.
@@ -121,6 +139,20 @@ export function hasSpecialChar(message = "Debe incluir al menos un carácter esp
     name: "hasSpecialChar",
     message,
     validate: (value) => /[^A-Za-z0-9]/.test(String(value ?? "")),
+  };
+}
+
+export function personNameFormat(
+  message = "Solo se permiten letras, espacios, puntos, apóstrofes y guiones."
+) {
+  return {
+    name: "personNameFormat",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true; // que 'required' se encargue del vacío
+      return PATTERNS.PERSON_NAME.test(v);
+    },
   };
 }
 
@@ -203,6 +235,25 @@ export const VALIDATION_GROUPS = {
     validators: [
       required("La confirmación de contraseña es obligatoria."),
       sameAs((ctx) => ctx?.password, "Las contraseñas no coinciden."),
+    ],
+  }),
+
+  adminUserFirstName: createGroup({
+    // Permitimos que el usuario vea los espacios mientras escribe;
+    // solo colapsamos espacios duplicados.
+    transforms: [collapseSpaces],
+    validators: [
+      required("El nombre es obligatorio."),
+      personNameFormat(),
+    ],
+  }),
+
+  adminUserLastName: createGroup({
+    // Igual que en el nombre: no quitamos espacios al vuelo.
+    transforms: [collapseSpaces],
+    validators: [
+      required("El apellido es obligatorio."),
+      personNameFormat(),
     ],
   }),
 };
