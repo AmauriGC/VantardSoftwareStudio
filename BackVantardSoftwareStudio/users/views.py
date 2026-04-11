@@ -26,6 +26,8 @@ from .serializers import (
     UserProfileOutputSerializer,
     UserUpdateProfileSerializer,
     UserChangePasswordSerializer,
+    AdminCreateUserSerializer,
+    AdminUpdateUserSerializer,
     UserListOutputSerializer,
     UserUpdateStatusSerializer,
     PasswordResetRequestSerializer,
@@ -677,6 +679,92 @@ class UserUpdateStatusView(APIView):
         user.status    = serializer.validated_data['status']
         user.is_active = user.status == User.Status.ACTIVE
         user.save(update_fields=['status', 'is_active', 'updated_at'])
+
+        log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200, user_id=user.pk)
+        return success_response(message='Status de usuario actualizado correctamente.')
+
+
+# ---------------------------------------------------------------------------
+# Admin – Crear usuario (admin)
+# ---------------------------------------------------------------------------
+
+
+class AdminCreateUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        serializer = AdminCreateUserSerializer(data=request.data)
+        if not serializer.is_valid():
+            log_request(request, 'ADMIN_CREATE_USER_FAILED', 400)
+            return error_response(
+                message=INVALID_DATA_MSG,
+                data=serializer.errors,
+                status=400,
+            )
+
+        data = serializer.validated_data
+
+        admin_role = Role.objects.filter(role_name__iexact='admin').first()
+        if not admin_role:
+            log_request(request, 'ADMIN_CREATE_USER_FAILED', 500)
+            return error_response(
+                message='No existe el rol Admin configurado. Contacta al administrador.',
+                status=500,
+            )
+
+        user = User.objects.create_user(
+            email=data['email'],
+            password=data['password'],
+            first_name=data['first_name'],
+            last_name=data['last_name'],
+            role=admin_role,
+        )
+
+        log_request(request, 'ADMIN_CREATE_USER', 201, user_id=user.pk)
+        return success_response(
+            data=UserListOutputSerializer(user).data,
+            message='Usuario admin creado correctamente.',
+            status=201,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Admin – Actualizar nombre/apellido/email de usuario
+# ---------------------------------------------------------------------------
+
+
+class AdminUpdateUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def put(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, deleted_at__isnull=True)
+        except User.DoesNotExist:
+            return error_response(
+                message=f'No se encontró un usuario con id {pk}.',
+                status=404,
+            )
+
+        serializer = AdminUpdateUserSerializer(data=request.data, context={'user': user})
+        if not serializer.is_valid():
+            log_request(request, 'ADMIN_UPDATE_USER_FAILED', 400, user_id=user.pk)
+            return error_response(
+                message=INVALID_DATA_MSG,
+                data=serializer.errors,
+                status=400,
+            )
+
+        data = serializer.validated_data
+        user.first_name = data['first_name']
+        user.last_name = data['last_name']
+        user.email = data['email']
+        user.save(update_fields=['first_name', 'last_name', 'email', 'updated_at'])
+
+        log_request(request, 'ADMIN_UPDATE_USER', 200, user_id=user.pk)
+        return success_response(
+            data=UserListOutputSerializer(user).data,
+            message='Usuario actualizado correctamente.',
+        )
 
         log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200)
         return success_response(

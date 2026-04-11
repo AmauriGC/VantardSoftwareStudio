@@ -9,6 +9,8 @@ from .views import (
     DeleteAccountView,
     UserListView,
     UserUpdateStatusView,
+    AdminCreateUserView,
+    AdminUpdateUserView,
     PasswordResetRequestView,
     PasswordResetConfirmView,
 )
@@ -26,8 +28,10 @@ urlpatterns = [
     path('profile/delete/',    DeleteAccountView.as_view(),  name='user-delete-account'),
 
     # Admin
-    path('',                       UserListView.as_view(),         name='user-list'),
-    path('<int:pk>/status/',        UserUpdateStatusView.as_view(), name='user-update-status'),
+    path('',                        UserListView.as_view(),          name='user-list'),
+    path('<int:pk>/status/',        UserUpdateStatusView.as_view(),  name='user-update-status'),
+    path('admin/create/',           AdminCreateUserView.as_view(),   name='admin-create-user'),
+    path('admin/<int:pk>/',         AdminUpdateUserView.as_view(),   name='admin-update-user'),
 
     # Recuperación de contraseña
     path('password-reset/request/', PasswordResetRequestView.as_view(), name='password-reset-request'),
