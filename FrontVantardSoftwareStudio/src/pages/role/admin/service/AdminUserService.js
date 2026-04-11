@@ -12,18 +12,6 @@ const mapUserStatusToLabel = (status) => {
   }
 };
 
-const mapPlanStatusToLabel = (status) => {
-  if (!status) return "Sin plan";
-  switch (status) {
-    case "active":
-      return "Activo";
-    case "expired":
-      return "Expirado";
-    default:
-      return "Sin plan";
-  }
-};
-
 const AdminUserService = {
   async listUsers() {
     try {
@@ -50,7 +38,7 @@ const AdminUserService = {
             apellido: item.last_name || "",
             email: item.email || "",
             rol: item.role_name || "-",
-            estadoPlan: estadoUsuario,
+            estadoCuenta: estadoUsuario,
             status: rawStatus,
             plan: "-",
             totalDespliegues: "-",
@@ -65,7 +53,7 @@ const AdminUserService = {
           apellido: item.last_name || "",
           email: item.email || "",
           rol: item.role_name || "-",
-          estadoPlan: estadoUsuario,
+          estadoCuenta: estadoUsuario,
           status: rawStatus,
           plan: item.plan_name || "Sin plan",
           totalDespliegues:
@@ -118,7 +106,7 @@ const AdminUserService = {
         email: (email || "").trim().toLowerCase(),
       };
 
-      await axiosClient.put(ENDPOINTS.users.adminUpdate(id), payload);
+      await axiosClient.patch(ENDPOINTS.users.adminUpdate(id), payload);
 
       return {
         ok: true,

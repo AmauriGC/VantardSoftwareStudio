@@ -5,7 +5,7 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseInput from "../../../components/BaseInput";
 import BaseModal from "../../../components/BaseModal";
-import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import { showSuccessAlert, showErrorAlert, confirmAction } from "../../../kernel/alerts";
 import AdminUserService from "./service/AdminUserService";
 import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 
@@ -189,6 +189,18 @@ export default function AdminUsuarios() {
 
     const nextStatus = usuario.status === "active" ? "blocked" : "active";
 
+    const isActivating = nextStatus === "active";
+    const confirmed = await confirmAction({
+      title: isActivating ? "Activar usuario" : "Suspender usuario",
+      text: isActivating
+        ? `¿Quieres activar la cuenta de ${usuario.nombre} ${usuario.apellido}?`
+        : `¿Quieres suspender la cuenta de ${usuario.nombre} ${usuario.apellido}? El usuario no podrá iniciar sesión mientras esté suspendido.`,
+      confirmText: isActivating ? "Activar" : "Suspender",
+      cancelText: "Cancelar",
+    });
+
+    if (!confirmed) return;
+
     setUpdatingStatusId(usuario.id);
     try {
       const result = await AdminUserService.updateStatus(usuario.id, nextStatus);
@@ -201,7 +213,7 @@ export default function AdminUsuarios() {
         return;
       }
 
-      const nuevaEtiqueta = result.data?.label || usuario.estadoPlan;
+      const nuevaEtiqueta = result.data?.label || usuario.estadoCuenta;
 
       setUsuarios((prev) =>
         prev.map((u) =>
@@ -209,7 +221,7 @@ export default function AdminUsuarios() {
             ? {
                 ...u,
                 status: nextStatus,
-                estadoPlan: nuevaEtiqueta,
+                    estadoCuenta: nuevaEtiqueta,
               }
             : u
         )
@@ -221,7 +233,7 @@ export default function AdminUsuarios() {
             ? {
                 ...prev,
                 status: nextStatus,
-                estadoPlan: nuevaEtiqueta,
+                estadoCuenta: nuevaEtiqueta,
               }
             : prev
         );
@@ -319,7 +331,7 @@ export default function AdminUsuarios() {
                           disabled={updatingStatusId === u.id}
                         />
                         <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                        <span className="ml-2 text-xs text-gray-600">{u.estadoPlan}</span>
+                        <span className="ml-2 text-xs text-gray-600">{u.estadoCuenta}</span>
                       </label>
                     </td>
                     <td className="py-3 px-4 text-gray-500">{u.rol}</td>
@@ -406,6 +418,14 @@ export default function AdminUsuarios() {
             error={emailField.error}
           />
           {modal === "crear" && (
+            <BaseInput
+              id="form-rol"
+              label="Rol asignado"
+              value="Admin"
+              disabled
+            />
+          )}
+          {modal === "crear" && (
             <>
               <BaseInput
                 id="form-password"
@@ -461,7 +481,7 @@ export default function AdminUsuarios() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Estado</p>
-                <EstadoBadge estado={usuarioSeleccionado.estadoPlan} />
+                <EstadoBadge estado={usuarioSeleccionado.estadoCuenta} />
               </div>
               <div>
                 <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Rol</p>
@@ -484,11 +504,11 @@ export default function AdminUsuarios() {
                 <p className="font-medium text-gray-900">{usuarioSeleccionado.creadoEn}</p>
               </div>
             </div>
-            {desplieguesDelUsuario.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                  Despliegues
-                </p>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Despliegues
+              </p>
+              {desplieguesDelUsuario.length > 0 ? (
                 <div className="flex flex-col gap-2">
                   {desplieguesDelUsuario.map((d) => {
                     const claseEstado =
@@ -508,8 +528,13 @@ export default function AdminUsuarios() {
                     );
                   })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Por ahora no se muestran los despliegues asociados al usuario en este panel.
+                  Esta sección se habilitará en una próxima versión.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </BaseModal>

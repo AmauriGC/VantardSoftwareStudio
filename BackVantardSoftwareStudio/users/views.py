@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction
+from django.db.models import Count, Sum
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
@@ -37,6 +38,7 @@ from .permissions import IsAdminUser
 from roles.models import Role
 from plans.models import Plan
 from user_plans.models import UserPlan
+from deployments.models import Deployment
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
@@ -633,7 +635,46 @@ class UserListView(APIView):
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
 
-        serializer = UserListOutputSerializer(page, many=True)
+        user_ids = [u.pk for u in page]
+
+        active_plans_by_user = {}
+        if user_ids:
+            active_plans = (
+                UserPlan.objects.filter(
+                    user_id__in=user_ids,
+                    status=UserPlan.Status.ACTIVE,
+                    deleted_at__isnull=True,
+                )
+                .select_related('plan')
+            )
+            active_plans_by_user = {up.user_id: up for up in active_plans}
+
+        deployment_stats_by_user = {}
+        if user_ids:
+            deployment_stats = (
+                Deployment.objects.filter(
+                    user_id__in=user_ids,
+                    deleted_at__isnull=True,
+                )
+                .values('user_id')
+                .annotate(
+                    total_deployments=Count('id'),
+                    used_disk_mb=Sum('disk_used_mb'),
+                )
+            )
+            deployment_stats_by_user = {
+                row['user_id']: row
+                for row in deployment_stats
+            }
+
+        serializer = UserListOutputSerializer(
+            page,
+            many=True,
+            context={
+                'active_plans_by_user': active_plans_by_user,
+                'deployment_stats_by_user': deployment_stats_by_user,
+            },
+        )
         log_request(request, 'ADMIN_LIST_USERS', 200)
         return success_response(
             data={
@@ -736,7 +777,7 @@ class AdminCreateUserView(APIView):
 class AdminUpdateUserView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
-    def put(self, request, pk):
+    def _update_user(self, request, pk):
         try:
             user = User.objects.get(pk=pk, deleted_at__isnull=True)
         except User.DoesNotExist:
@@ -766,9 +807,9 @@ class AdminUpdateUserView(APIView):
             message='Usuario actualizado correctamente.',
         )
 
-        log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200)
-        return success_response(
-            data=UserProfileOutputSerializer(user).data,
-            message=f'Status del usuario actualizado a "{user.status}".',
-        )
+    def patch(self, request, pk):
+        return self._update_user(request, pk)
+
+    def put(self, request, pk):
+        return self._update_user(request, pk)
     

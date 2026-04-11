@@ -4,7 +4,6 @@ import re
 from .models import User
 from user_plans.models import UserPlan
 from deployments.models import Deployment
-from deployment_version.models import DeploymentVersion
 
 
 NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿÑñ\s'.-]+$")
@@ -292,7 +291,6 @@ class UserListOutputSerializer(serializers.ModelSerializer):
 
     role_name = serializers.SerializerMethodField()
     plan_name = serializers.SerializerMethodField()
-    plan_status = serializers.SerializerMethodField()
     total_deployments = serializers.SerializerMethodField()
     used_disk_mb = serializers.SerializerMethodField()
 
@@ -306,7 +304,6 @@ class UserListOutputSerializer(serializers.ModelSerializer):
             'status',
             'role_name',
             'plan_name',
-            'plan_status',
             'total_deployments',
             'used_disk_mb',
             'created_at',
@@ -324,6 +321,11 @@ class UserListOutputSerializer(serializers.ModelSerializer):
         return 'User'
 
     def _get_active_user_plan(self, obj):
+        cached_plans = self.context.get('active_plans_by_user') or {}
+        user_plan = cached_plans.get(obj.pk)
+        if user_plan is not None:
+            return user_plan
+
         return (
             UserPlan.objects.filter(
                 user=obj,
@@ -338,17 +340,23 @@ class UserListOutputSerializer(serializers.ModelSerializer):
         user_plan = self._get_active_user_plan(obj)
         return user_plan.plan.name if user_plan and user_plan.plan else None
 
-    def get_plan_status(self, obj):
-        user_plan = self._get_active_user_plan(obj)
-        return user_plan.status if user_plan else None
-
     def get_total_deployments(self, obj):
-        return DeploymentVersion.objects.filter(
-            deployment__user=obj,
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('total_deployments') or 0)
+
+        return Deployment.objects.filter(
+            user=obj,
             deleted_at__isnull=True,
         ).count()
 
     def get_used_disk_mb(self, obj):
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('used_disk_mb') or 0)
+
         value = (
             Deployment.objects.filter(user=obj, deleted_at__isnull=True)
             .values_list('disk_used_mb', flat=True)
