@@ -763,7 +763,10 @@ class AdminCreateUserView(APIView):
 
         log_request(request, 'ADMIN_CREATE_USER', 201, user_id=user.pk)
         return success_response(
-            data=UserListOutputSerializer(user).data,
+            data=UserListOutputSerializer(user, context={
+                'active_plans_by_user': {},
+                'deployment_stats_by_user': {},
+            }).data,
             message='Usuario admin creado correctamente.',
             status=201,
         )
@@ -801,9 +804,35 @@ class AdminUpdateUserView(APIView):
         user.email = data['email']
         user.save(update_fields=['first_name', 'last_name', 'email', 'updated_at'])
 
+        active_plans_by_user = {}
+        user_plan = (
+            UserPlan.objects.filter(
+                user=user,
+                status=UserPlan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related('plan')
+            .first()
+        )
+        if user_plan:
+            active_plans_by_user[user.pk] = user_plan
+
+        deployment_stats_by_user = {}
+        stats = (
+            Deployment.objects.filter(user=user, deleted_at__isnull=True)
+            .values('user_id')
+            .annotate(total_deployments=Count('id'), used_disk_mb=Sum('disk_used_mb'))
+            .first()
+        )
+        if stats:
+            deployment_stats_by_user[user.pk] = stats
+
         log_request(request, 'ADMIN_UPDATE_USER', 200, user_id=user.pk)
         return success_response(
-            data=UserListOutputSerializer(user).data,
+            data=UserListOutputSerializer(user, context={
+                'active_plans_by_user': active_plans_by_user,
+                'deployment_stats_by_user': deployment_stats_by_user,
+            }).data,
             message='Usuario actualizado correctamente.',
         )
 
@@ -812,4 +841,3 @@ class AdminUpdateUserView(APIView):
 
     def put(self, request, pk):
         return self._update_user(request, pk)
-    
