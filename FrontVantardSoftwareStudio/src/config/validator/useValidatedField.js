@@ -58,12 +58,24 @@ export default function useValidatedField(initialValue, group, getContext) {
     return result.ok;
   }, [runValidation, fieldValue]);
 
+  const reset = useCallback(
+    (nextValue) => {
+      const valueToSet = nextValue !== undefined ? nextValue : initialValue ?? "";
+      setFieldValue(valueToSet);
+      setTouched(false);
+      setDirty(false);
+      setError("");
+    },
+    [initialValue]
+  );
+
   return {
     value: fieldValue,
     setValue,
     onChange,
     onBlur,
     validate,
+    reset,
     touched,
     dirty,
     error,

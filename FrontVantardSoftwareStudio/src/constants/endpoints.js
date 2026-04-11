@@ -16,6 +16,8 @@ export const ENDPOINTS = {
     deleteAccount: "/api/users/profile/delete/",
     list: "/api/users/",
     updateStatus: (id) => `/api/users/${id}/status/`,
+    adminCreate: "/api/users/admin/create/",
+    adminUpdate: (id) => `/api/users/admin/${id}/`,
   },
   deployments: {
     list: "/api/deployments/",

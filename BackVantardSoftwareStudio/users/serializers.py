@@ -6,7 +6,7 @@ from user_plans.models import UserPlan
 from deployments.models import Deployment
 
 
-NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿÑñ\s'-]+$")
+NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿÑñ\s'.-]+$")
 
 
 def _validate_person_name(value, field_label):
@@ -15,7 +15,7 @@ def _validate_person_name(value, field_label):
         raise serializers.ValidationError(f'{field_label} es obligatorio.')
     if not NAME_PATTERN.match(normalized):
         raise serializers.ValidationError(
-            f'{field_label} solo permite letras, espacios, apostrofe y guion.'
+            f'{field_label} solo permite letras, espacios, puntos, apostrofe y guion.'
         )
     return normalized
 
@@ -25,15 +25,15 @@ def _validate_strong_password(value):
     errors = []
 
     if len(pwd) < 8:
-        errors.append('Debe tener al menos 8 caracteres.')
+        errors.append('La contraseña debe tener al menos 8 caracteres.')
     if not re.search(r'[A-Z]', pwd):
-        errors.append('Debe incluir al menos una mayúscula.')
+        errors.append('La contraseña debe incluir al menos una mayúscula.')
     if not re.search(r'[a-z]', pwd):
-        errors.append('Debe incluir al menos una minúscula.')
+        errors.append('La contraseña debe incluir al menos una minúscula.')
     if not re.search(r'\d', pwd):
-        errors.append('Debe incluir al menos un número.')
+        errors.append('La contraseña debe incluir al menos un número.')
     if not re.search(r'[^A-Za-z0-9]', pwd):
-        errors.append('Debe incluir al menos un carácter especial.')
+        errors.append('La contraseña debe incluir al menos un carácter especial.')
 
     if errors:
         raise serializers.ValidationError(errors)
@@ -230,12 +230,69 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
 
 # ---------------------------------------------------------------------------
+# Admin – creación y edición de usuarios por admin
+# ---------------------------------------------------------------------------
+
+
+class AdminCreateUserSerializer(serializers.Serializer):
+    first_name       = serializers.CharField(max_length=100)
+    last_name        = serializers.CharField(max_length=100)
+    email            = serializers.EmailField(max_length=150)
+    password         = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+        return value.lower()
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, 'El nombre')
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, 'El apellido')
+
+    def validate_password(self, value):
+        return _validate_strong_password(value)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError('Las contraseñas no coinciden.')
+        return attrs
+
+
+class AdminUpdateUserSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=100)
+    last_name  = serializers.CharField(max_length=100)
+    email      = serializers.EmailField(max_length=150)
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, 'El nombre')
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, 'El apellido')
+
+    def validate_email(self, value):
+        normalized = value.lower()
+        user = self.context.get('user')
+        qs = User.objects.filter(email=normalized)
+        if user is not None:
+            qs = qs.exclude(pk=user.pk)
+        if qs.exists():
+            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+        return normalized
+
+
+# ---------------------------------------------------------------------------
 # Admin – listado de usuarios
 # ---------------------------------------------------------------------------
 
 class UserListOutputSerializer(serializers.ModelSerializer):
 
     role_name = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+    total_deployments = serializers.SerializerMethodField()
+    used_disk_mb = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
@@ -246,11 +303,65 @@ class UserListOutputSerializer(serializers.ModelSerializer):
             'email',
             'status',
             'role_name',
+            'plan_name',
+            'total_deployments',
+            'used_disk_mb',
             'created_at',
         ]
 
     def get_role_name(self, obj):
-        return obj.role.role_name if obj.role else None
+        if obj.role:
+            return obj.role.role_name
+
+        # Fallback para usuarios que aún no tienen rol asignado en DB.
+        # Si es superusuario/staff lo tratamos como Admin, en caso contrario como User.
+        if getattr(obj, 'is_superuser', False) or getattr(obj, 'is_staff', False):
+            return 'Admin'
+
+        return 'User'
+
+    def _get_active_user_plan(self, obj):
+        cached_plans = self.context.get('active_plans_by_user') or {}
+        user_plan = cached_plans.get(obj.pk)
+        if user_plan is not None:
+            return user_plan
+
+        return (
+            UserPlan.objects.filter(
+                user=obj,
+                status=UserPlan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related('plan')
+            .first()
+        )
+
+    def get_plan_name(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.plan.name if user_plan and user_plan.plan else None
+
+    def get_total_deployments(self, obj):
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('total_deployments') or 0)
+
+        return Deployment.objects.filter(
+            user=obj,
+            deleted_at__isnull=True,
+        ).count()
+
+    def get_used_disk_mb(self, obj):
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('used_disk_mb') or 0)
+
+        value = (
+            Deployment.objects.filter(user=obj, deleted_at__isnull=True)
+            .values_list('disk_used_mb', flat=True)
+        )
+        return int(sum(value or [0]))
 
 
 # ---------------------------------------------------------------------------

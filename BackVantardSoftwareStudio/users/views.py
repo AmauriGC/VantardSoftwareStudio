@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
 from django.db import transaction
+from django.db.models import Count, Sum
 from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
@@ -26,6 +27,8 @@ from .serializers import (
     UserProfileOutputSerializer,
     UserUpdateProfileSerializer,
     UserChangePasswordSerializer,
+    AdminCreateUserSerializer,
+    AdminUpdateUserSerializer,
     UserListOutputSerializer,
     UserUpdateStatusSerializer,
     PasswordResetRequestSerializer,
@@ -35,6 +38,7 @@ from .permissions import IsAdminUser
 from roles.models import Role
 from plans.models import Plan
 from user_plans.models import UserPlan
+from deployments.models import Deployment
 from system_logs.utils import log_request
 from kernel.responses import success_response, error_response
 
@@ -631,7 +635,46 @@ class UserListView(APIView):
         paginator.page_size = 20
         page = paginator.paginate_queryset(qs, request)
 
-        serializer = UserListOutputSerializer(page, many=True)
+        user_ids = [u.pk for u in page]
+
+        active_plans_by_user = {}
+        if user_ids:
+            active_plans = (
+                UserPlan.objects.filter(
+                    user_id__in=user_ids,
+                    status=UserPlan.Status.ACTIVE,
+                    deleted_at__isnull=True,
+                )
+                .select_related('plan')
+            )
+            active_plans_by_user = {up.user_id: up for up in active_plans}
+
+        deployment_stats_by_user = {}
+        if user_ids:
+            deployment_stats = (
+                Deployment.objects.filter(
+                    user_id__in=user_ids,
+                    deleted_at__isnull=True,
+                )
+                .values('user_id')
+                .annotate(
+                    total_deployments=Count('id'),
+                    used_disk_mb=Sum('disk_used_mb'),
+                )
+            )
+            deployment_stats_by_user = {
+                row['user_id']: row
+                for row in deployment_stats
+            }
+
+        serializer = UserListOutputSerializer(
+            page,
+            many=True,
+            context={
+                'active_plans_by_user': active_plans_by_user,
+                'deployment_stats_by_user': deployment_stats_by_user,
+            },
+        )
         log_request(request, 'ADMIN_LIST_USERS', 200)
         return success_response(
             data={
@@ -678,9 +721,123 @@ class UserUpdateStatusView(APIView):
         user.is_active = user.status == User.Status.ACTIVE
         user.save(update_fields=['status', 'is_active', 'updated_at'])
 
-        log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200)
-        return success_response(
-            data=UserProfileOutputSerializer(user).data,
-            message=f'Status del usuario actualizado a "{user.status}".',
+        log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200, user_id=user.pk)
+        return success_response(message='Status de usuario actualizado correctamente.')
+
+
+# ---------------------------------------------------------------------------
+# Admin – Crear usuario (admin)
+# ---------------------------------------------------------------------------
+
+
+class AdminCreateUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        serializer = AdminCreateUserSerializer(data=request.data)
+        if not serializer.is_valid():
+            log_request(request, 'ADMIN_CREATE_USER_FAILED', 400)
+            return error_response(
+                message=INVALID_DATA_MSG,
+                data=serializer.errors,
+                status=400,
+            )
+
+        data = serializer.validated_data
+
+        admin_role = Role.objects.filter(role_name__iexact='admin').first()
+        if not admin_role:
+            log_request(request, 'ADMIN_CREATE_USER_FAILED', 500)
+            return error_response(
+                message='No existe el rol Admin configurado. Contacta al administrador.',
+                status=500,
+            )
+
+        user = User.objects.create_user(
+            email=data['email'],
+            password=data['password'],
+            first_name=data['first_name'],
+            last_name=data['last_name'],
+            role=admin_role,
         )
-    
+
+        log_request(request, 'ADMIN_CREATE_USER', 201, user_id=user.pk)
+        return success_response(
+            data=UserListOutputSerializer(user, context={
+                'active_plans_by_user': {},
+                'deployment_stats_by_user': {},
+            }).data,
+            message='Usuario admin creado correctamente.',
+            status=201,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Admin – Actualizar nombre/apellido/email de usuario
+# ---------------------------------------------------------------------------
+
+
+class AdminUpdateUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def _update_user(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk, deleted_at__isnull=True)
+        except User.DoesNotExist:
+            return error_response(
+                message=f'No se encontró un usuario con id {pk}.',
+                status=404,
+            )
+
+        serializer = AdminUpdateUserSerializer(data=request.data, context={'user': user})
+        if not serializer.is_valid():
+            log_request(request, 'ADMIN_UPDATE_USER_FAILED', 400, user_id=user.pk)
+            return error_response(
+                message=INVALID_DATA_MSG,
+                data=serializer.errors,
+                status=400,
+            )
+
+        data = serializer.validated_data
+        user.first_name = data['first_name']
+        user.last_name = data['last_name']
+        user.email = data['email']
+        user.save(update_fields=['first_name', 'last_name', 'email', 'updated_at'])
+
+        active_plans_by_user = {}
+        user_plan = (
+            UserPlan.objects.filter(
+                user=user,
+                status=UserPlan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related('plan')
+            .first()
+        )
+        if user_plan:
+            active_plans_by_user[user.pk] = user_plan
+
+        deployment_stats_by_user = {}
+        stats = (
+            Deployment.objects.filter(user=user, deleted_at__isnull=True)
+            .values('user_id')
+            .annotate(total_deployments=Count('id'), used_disk_mb=Sum('disk_used_mb'))
+            .first()
+        )
+        if stats:
+            deployment_stats_by_user[user.pk] = stats
+
+        log_request(request, 'ADMIN_UPDATE_USER', 200, user_id=user.pk)
+        return success_response(
+            data=UserListOutputSerializer(user, context={
+                'active_plans_by_user': active_plans_by_user,
+                'deployment_stats_by_user': deployment_stats_by_user,
+            }).data,
+            message='Usuario actualizado correctamente.',
+        )
+
+    def patch(self, request, pk):
+        return self._update_user(request, pk)
+
+    def put(self, request, pk):
+        return self._update_user(request, pk)
