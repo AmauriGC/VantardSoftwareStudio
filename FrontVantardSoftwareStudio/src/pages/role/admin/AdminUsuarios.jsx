@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
-import { Plus, Eye, Pencil, Trash2, Search } from "lucide-react";
-
+import { Plus, Eye, Pencil, Search } from "lucide-react";
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseInput from "../../../components/BaseInput";
 import BaseModal from "../../../components/BaseModal";
-import { usuarios, despliegues } from "../../../data/mockData";
-import { showSuccessAlert, confirmAction } from "../../../kernel/alerts";
+import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import AdminUserService from "./service/AdminUserService";
+import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 
 const ESTADO_CLASES = {
   Activo: "bg-green-50 text-green-700",
@@ -39,12 +39,52 @@ EstadoBadge.propTypes = {
 
 export default function AdminUsuarios() {
   const [busqueda, setBusqueda] = useState("");
-  const [modal, setModal] = useState(null); // "crear" | "editar" | "ver" | "eliminar"
+  const [modal, setModal] = useState(null); // "crear" | "editar" | "ver"
   const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-  const [formNombre, setFormNombre] = useState("");
-  const [formApellido, setFormApellido] = useState("");
-  const [formEmail, setFormEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
+
+  const nombreField = useValidatedField("", VALIDATION_GROUPS.adminUserFirstName);
+  const apellidoField = useValidatedField("", VALIDATION_GROUPS.adminUserLastName);
+  const emailField = useValidatedField("", VALIDATION_GROUPS.authEmail);
+  const passwordField = useValidatedField("", VALIDATION_GROUPS.registerPassword);
+  const confirmPasswordField = useValidatedField(
+    "",
+    VALIDATION_GROUPS.confirmPassword,
+    () => ({ password: passwordField.value })
+  );
+
+  const [usuarios, setUsuarios] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargarUsuarios = async () => {
+    setLoading(true);
+    try {
+      const result = await AdminUserService.listUsers();
+      if (!result.ok) {
+        showErrorAlert({
+          title: "Error al cargar usuarios",
+          text: result.message || "No se pudieron cargar los usuarios desde el servidor.",
+        });
+        setUsuarios([]);
+        return;
+      }
+      setUsuarios(result.data || []);
+    } catch (error) {
+      console.error("Error cargando usuarios:", error);
+      showErrorAlert({
+        title: "Error al cargar usuarios",
+        text: "No se pudieron cargar los usuarios desde el servidor.",
+      });
+      setUsuarios([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarUsuarios();
+  }, []);
 
   const filtrados = usuarios.filter(
     (u) =>
@@ -57,13 +97,17 @@ export default function AdminUsuarios() {
     setModal(tipo);
     setUsuarioSeleccionado(usuario);
     if (usuario) {
-      setFormNombre(usuario.nombre);
-      setFormApellido(usuario.apellido);
-      setFormEmail(usuario.email);
+      nombreField.reset(usuario.nombre ?? "");
+      apellidoField.reset(usuario.apellido ?? "");
+      emailField.reset(usuario.email ?? "");
+      passwordField.reset("");
+      confirmPasswordField.reset("");
     } else {
-      setFormNombre("");
-      setFormApellido("");
-      setFormEmail("");
+      nombreField.reset("");
+      apellidoField.reset("");
+      emailField.reset("");
+      passwordField.reset("");
+      confirmPasswordField.reset("");
     }
   };
 
@@ -74,33 +118,125 @@ export default function AdminUsuarios() {
 
   const handleGuardar = async () => {
     setIsSubmitting(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setIsSubmitting(false);
-    cerrarModal();
-    showSuccessAlert({
-      title: modal === "crear" ? "Usuario creado" : "Usuario actualizado",
-      text:
-        modal === "crear"
-          ? "El usuario fue creado correctamente."
-          : "Los datos del usuario fueron actualizados.",
-    });
+    try {
+      const okNombre = nombreField.validate();
+      const okApellido = apellidoField.validate();
+      const okEmail = emailField.validate();
+
+      let okPassword = true;
+      let okConfirm = true;
+
+      if (modal === "crear") {
+        okPassword = passwordField.validate();
+        okConfirm = confirmPasswordField.validate();
+      }
+
+      if (!okNombre || !okApellido || !okEmail || !okPassword || !okConfirm) {
+        return;
+      }
+
+      if (modal === "crear") {
+        const result = await AdminUserService.createUser({
+          nombre: nombreField.value,
+          apellido: apellidoField.value,
+          email: emailField.value,
+          password: passwordField.value,
+          confirmPassword: confirmPasswordField.value,
+        });
+
+        if (!result.ok) {
+          showErrorAlert({
+            title: "No se pudo crear el usuario",
+            text: result.message || "Revisa los datos e inténtalo de nuevo.",
+          });
+          return;
+        }
+
+        showSuccessAlert({
+          title: "Usuario creado",
+          text: "El usuario fue creado correctamente.",
+        });
+      } else if (modal === "editar" && usuarioSeleccionado) {
+        const result = await AdminUserService.updateUser(usuarioSeleccionado.id, {
+          nombre: nombreField.value,
+          apellido: apellidoField.value,
+          email: emailField.value,
+        });
+
+        if (!result.ok) {
+          showErrorAlert({
+            title: "No se pudo actualizar el usuario",
+            text: result.message || "Revisa los datos e inténtalo de nuevo.",
+          });
+          return;
+        }
+
+        showSuccessAlert({
+          title: "Usuario actualizado",
+          text: "Los datos del usuario fueron actualizados.",
+        });
+      }
+
+      cerrarModal();
+      await cargarUsuarios();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleEliminar = async () => {
-    const ok = await confirmAction({
-      title: "Eliminar usuario",
-      text: `¿Quieres eliminar a ${usuarioSeleccionado?.nombre} ${usuarioSeleccionado?.apellido}? Esta acción no se puede deshacer.`,
-      confirmText: "Eliminar",
-      cancelText: "Cancelar",
-    });
-    if (!ok) return;
-    cerrarModal();
-    showSuccessAlert({ title: "Usuario eliminado", text: "El usuario fue eliminado del sistema." });
+  const handleToggleStatus = async (usuario) => {
+    if (!usuario || updatingStatusId !== null) return;
+
+    const nextStatus = usuario.status === "active" ? "blocked" : "active";
+
+    setUpdatingStatusId(usuario.id);
+    try {
+      const result = await AdminUserService.updateStatus(usuario.id, nextStatus);
+
+      if (!result.ok) {
+        showErrorAlert({
+          title: "No se pudo actualizar el estado",
+          text: result.message || "Inténtalo de nuevo más tarde.",
+        });
+        return;
+      }
+
+      const nuevaEtiqueta = result.data?.label || usuario.estadoPlan;
+
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === usuario.id
+            ? {
+                ...u,
+                status: nextStatus,
+                estadoPlan: nuevaEtiqueta,
+              }
+            : u
+        )
+      );
+
+      if (usuarioSeleccionado && usuarioSeleccionado.id === usuario.id) {
+        setUsuarioSeleccionado((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextStatus,
+                estadoPlan: nuevaEtiqueta,
+              }
+            : prev
+        );
+      }
+
+      showSuccessAlert({
+        title: "Estado actualizado",
+        text: `El usuario ahora está ${nextStatus === "active" ? "activo" : "suspendido"}.`,
+      });
+    } finally {
+      setUpdatingStatusId(null);
+    }
   };
 
-  const desplieguesDelUsuario = usuarioSeleccionado
-    ? despliegues.filter((d) => d.usuarioId === usuarioSeleccionado.id)
-    : [];
+  const desplieguesDelUsuario = [];
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -124,6 +260,8 @@ export default function AdminUsuarios() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
+              name="user-search"
+              autoComplete="off"
               placeholder="Buscar por nombre o email..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -135,7 +273,7 @@ export default function AdminUsuarios() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {["Nombre", "Apellido", "Email", "Estado", "Plan", "Despliegues", "Acciones"].map(
+                {["Nombre", "Apellido", "Email", "Estado", "Rol", "Plan", "Despliegues", "Acciones"].map(
                   (col) => (
                     <th
                       key={col}
@@ -150,9 +288,15 @@ export default function AdminUsuarios() {
               </tr>
             </thead>
             <tbody>
-              {filtrados.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+                    Cargando usuarios...
+                  </td>
+                </tr>
+              ) : filtrados.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
                     No se encontraron usuarios.
                   </td>
                 </tr>
@@ -166,8 +310,19 @@ export default function AdminUsuarios() {
                     <td className="py-3 px-4 text-gray-500">{u.apellido}</td>
                     <td className="py-3 px-4 text-gray-500">{u.email}</td>
                     <td className="py-3 px-4">
-                      <EstadoBadge estado={u.estadoPlan} />
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={u.status === "active"}
+                          onChange={() => handleToggleStatus(u)}
+                          disabled={updatingStatusId === u.id}
+                        />
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                        <span className="ml-2 text-xs text-gray-600">{u.estadoPlan}</span>
+                      </label>
                     </td>
+                    <td className="py-3 px-4 text-gray-500">{u.rol}</td>
                     <td className="py-3 px-4 text-gray-500">{u.plan}</td>
                     <td className="py-3 px-4 text-gray-500">{u.totalDespliegues}</td>
                     <td className="py-3 px-4">
@@ -189,15 +344,6 @@ export default function AdminUsuarios() {
                           title="Editar"
                         >
                           <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => abrirModal("eliminar", u)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          aria-label="Eliminar"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -231,15 +377,21 @@ export default function AdminUsuarios() {
               id="form-nombre"
               label="Nombre"
               placeholder="Juan"
-              value={formNombre}
-              onChange={(e) => setFormNombre(e.target.value)}
+              autoComplete="given-name"
+              value={nombreField.value}
+              onChange={nombreField.onChange}
+              onBlur={nombreField.onBlur}
+              error={nombreField.error}
             />
             <BaseInput
               id="form-apellido"
               label="Apellido"
               placeholder="Pérez"
-              value={formApellido}
-              onChange={(e) => setFormApellido(e.target.value)}
+              autoComplete="family-name"
+              value={apellidoField.value}
+              onChange={apellidoField.onChange}
+              onBlur={apellidoField.onBlur}
+              error={apellidoField.error}
             />
           </div>
           <BaseInput
@@ -247,17 +399,35 @@ export default function AdminUsuarios() {
             label="Correo electrónico"
             type="email"
             placeholder="juan@ejemplo.com"
-            value={formEmail}
-            onChange={(e) => setFormEmail(e.target.value)}
+            autoComplete="email"
+            value={emailField.value}
+            onChange={emailField.onChange}
+            onBlur={emailField.onBlur}
+            error={emailField.error}
           />
           {modal === "crear" && (
             <>
-              <BaseInput id="form-password" label="Contraseña" type="password" placeholder="••••••••" />
+              <BaseInput
+                id="form-password"
+                label="Contraseña"
+                type="password"
+                placeholder="••••••••"
+                autoComplete="new-password"
+                value={passwordField.value}
+                onChange={passwordField.onChange}
+                onBlur={passwordField.onBlur}
+                error={passwordField.error}
+              />
               <BaseInput
                 id="form-confirm-password"
                 label="Confirmar contraseña"
                 type="password"
                 placeholder="••••••••"
+                autoComplete="new-password"
+                value={confirmPasswordField.value}
+                onChange={confirmPasswordField.onChange}
+                onBlur={confirmPasswordField.onBlur}
+                error={confirmPasswordField.error}
               />
             </>
           )}
@@ -292,6 +462,10 @@ export default function AdminUsuarios() {
               <div>
                 <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Estado</p>
                 <EstadoBadge estado={usuarioSeleccionado.estadoPlan} />
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Rol</p>
+                <p className="font-medium text-gray-900">{usuarioSeleccionado.rol}</p>
               </div>
               <div>
                 <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Plan</p>
@@ -341,32 +515,7 @@ export default function AdminUsuarios() {
       </BaseModal>
 
       {/* Modal eliminar */}
-      <BaseModal
-        open={modal === "eliminar"}
-        onClose={cerrarModal}
-        title="Eliminar usuario"
-        footer={
-          <>
-            <BaseButton variant="secondary" onClick={cerrarModal}>
-              Cancelar
-            </BaseButton>
-            <BaseButton
-              onClick={handleEliminar}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              Eliminar
-            </BaseButton>
-          </>
-        }
-      >
-        <p className="text-sm text-gray-600">
-          ¿Estás seguro de que quieres eliminar a{" "}
-          <span className="font-semibold text-gray-900">
-            {`${usuarioSeleccionado?.nombre ?? ""} ${usuarioSeleccionado?.apellido ?? ""}`}
-          </span>
-          {" "}? Esta acción no se puede deshacer y se eliminarán todos sus despliegues.
-        </p>
-      </BaseModal>
+      {/* Modal eliminar eliminado: la acción ahora es cambiar status (switch) */}
     </div>
   );
 }
