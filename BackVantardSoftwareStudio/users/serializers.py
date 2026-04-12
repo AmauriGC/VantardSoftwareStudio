@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Sum
 import re
 from .models import User
 from user_plans.models import UserPlan
@@ -103,8 +104,10 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
     plan_status = serializers.SerializerMethodField()
     plan_max_disk_mb = serializers.SerializerMethodField()
-    plan_max_upload_mb = serializers.SerializerMethodField()
     used_disk_mb = serializers.SerializerMethodField()
+    active_site_domain = serializers.SerializerMethodField()
+    active_site_disk_used_mb = serializers.SerializerMethodField()
+    total_traffic_visit_count = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
@@ -119,11 +122,24 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
             'plan_name',
             'plan_status',
             'plan_max_disk_mb',
-            'plan_max_upload_mb',
             'used_disk_mb',
+            'active_site_domain',
+            'active_site_disk_used_mb',
+            'total_traffic_visit_count',
             'created_at',
             'updated_at',
         ]
+
+    def _get_latest_active_deployment(self, obj):
+        return (
+            Deployment.objects.filter(
+                user=obj,
+                status=Deployment.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .order_by('-created_at')
+            .first()
+        )
 
     def get_role_name(self, obj):
         return obj.role.role_name if obj.role else None
@@ -138,28 +154,6 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
             .select_related('plan')
             .first()
         )
-
-    def _resolve_max_upload_mb(self, plan):
-        explicit = getattr(plan, 'max_upload_mb', None)
-        if explicit is not None:
-            return explicit
-
-        # Fallback por nombre mientras el esquema no tenga max_upload_mb.
-        by_name = {
-            'gratis': 5,
-            'free': 5,
-            'basico': 5,
-            'básico': 5,
-            'medio': 10,
-            'pro': 10,
-            'premium': 20,
-            'completo': 20,
-        }
-        plan_name = str(getattr(plan, 'name', '')).strip().lower()
-        if plan_name in by_name:
-            return by_name[plan_name]
-
-        return min(getattr(plan, 'max_disk_mb', 10), 10)
 
     def get_plan_id(self, obj):
         user_plan = self._get_active_user_plan(obj)
@@ -177,18 +171,26 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
         user_plan = self._get_active_user_plan(obj)
         return user_plan.plan.max_disk_mb if user_plan and user_plan.plan else 0
 
-    def get_plan_max_upload_mb(self, obj):
-        user_plan = self._get_active_user_plan(obj)
-        if not user_plan or not user_plan.plan:
-            return 0
-        return self._resolve_max_upload_mb(user_plan.plan)
-
     def get_used_disk_mb(self, obj):
-        value = (
-            Deployment.objects.filter(user=obj, deleted_at__isnull=True)
-            .values_list('disk_used_mb', flat=True)
-        )
-        return int(sum(value or [0]))
+        deployment = self._get_latest_active_deployment(obj)
+        return int(getattr(deployment, 'disk_used_mb', 0) or 0)
+
+    def get_active_site_domain(self, obj):
+        deployment = self._get_latest_active_deployment(obj)
+        return getattr(deployment, 'domain', None)
+
+    def get_active_site_disk_used_mb(self, obj):
+        deployment = self._get_latest_active_deployment(obj)
+        return int(getattr(deployment, 'disk_used_mb', 0) or 0)
+
+    def get_total_traffic_visit_count(self, obj):
+        total = (
+            Deployment.objects.filter(
+                user=obj,
+                deleted_at__isnull=True,
+            ).aggregate(total=Sum('traffic_visit_count'))
+        ).get('total')
+        return int(total or 0)
 
 
 # ---------------------------------------------------------------------------
