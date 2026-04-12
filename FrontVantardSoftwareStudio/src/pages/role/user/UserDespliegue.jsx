@@ -5,6 +5,7 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseTable from "../../../components/BaseTable";
 import { formatearFecha } from "../../../utils/formatters";
+import { showErrorAlert } from "../../../kernel/alerts";
 import DeploymentService from "./service/DeploymentService";
 
 const deploymentColumns = [
@@ -89,53 +90,72 @@ export default function UserDespliegue() {
   const TABLE_PAGE_SIZE = 10;
 
   useEffect(() => {
-    const cargarInicial = async () => {
+    let cancelled = false;
+
+    const cargarPagina = async () => {
       try {
-        // Cargar página 1 para resolver el despliegue actual (activo) y la primera página de la tabla.
-        const resultDeploy = await DeploymentService.listMyDeployments({ page: 1 });
-        if (resultDeploy.ok) {
-          setMisDespliegues(resultDeploy.data);
-          setTableTotal(resultDeploy.meta?.total ?? resultDeploy.data.length);
-          setTablePage(1);
+        const resultDeploy = await DeploymentService.listMyDeployments({ page: tablePage });
+        if (cancelled) return;
 
-          if (resultDeploy.data.length > 0) {
-            const activo = resultDeploy.data.find(
-              (d) => String(d.status ?? d.estado ?? "").toLowerCase() === "active"
-            );
-            const actual = activo ?? resultDeploy.data[0];
+        if (!resultDeploy.ok) {
+          showErrorAlert({
+            title: "Error",
+            text: resultDeploy.message || "No se pudieron cargar tus despliegues.",
+          });
 
-            // Obtener el detalle completo del despliegue actual
-            const resultDetail = await DeploymentService.getDeployment(actual.id);
-            if (resultDetail.ok) setMiDespliegue(resultDetail.data);
-          }
+          setMisDespliegues([]);
+          setTableTotal(0);
+          if (tablePage === 1) setMiDespliegue(null);
+          return;
         }
-      } catch (error) {
-        console.error("Error cargando despliegue:", error);
+
+        setMisDespliegues(resultDeploy.data);
+        setTableTotal(resultDeploy.meta?.total ?? resultDeploy.data.length);
+
+        // La página 1 resuelve el despliegue actual (activo) y la primera página de la tabla.
+        if (tablePage !== 1) return;
+
+        if (resultDeploy.data.length === 0) {
+          setMiDespliegue(null);
+          return;
+        }
+
+        const activo = resultDeploy.data.find(
+          (d) => String(d.status ?? d.estado ?? "").toLowerCase() === "active"
+        );
+        const actual = activo ?? resultDeploy.data[0];
+
+        const resultDetail = await DeploymentService.getDeployment(actual.id);
+        if (cancelled) return;
+
+        if (resultDetail.ok) {
+          setMiDespliegue(resultDetail.data);
+        } else {
+          showErrorAlert({
+            title: "Error",
+            text: resultDetail.message || "No se pudo cargar el detalle del despliegue.",
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        showErrorAlert({
+          title: "Error",
+          text: "No se pudieron cargar tus despliegues.",
+        });
+        setMisDespliegues([]);
+        setTableTotal(0);
+        if (tablePage === 1) setMiDespliegue(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    cargarInicial();
-  }, []);
+    cargarPagina();
 
-  useEffect(() => {
-    const cargarPaginaTabla = async () => {
-      if (loading) return;
-      try {
-        const result = await DeploymentService.listMyDeployments({ page: tablePage });
-        if (result.ok) {
-          setMisDespliegues(result.data);
-          setTableTotal(result.meta?.total ?? result.data.length);
-        }
-      } catch (error) {
-        console.error("Error cargando página de despliegues:", error);
-      }
+    return () => {
+      cancelled = true;
     };
-
-    // Evitar doble carga de la primera página (ya se carga en el efecto inicial)
-    if (tablePage !== 1) cargarPaginaTabla();
-  }, [tablePage, loading]);
+  }, [tablePage]);
 
   if (loading) {
     return (

@@ -773,7 +773,8 @@ class RollbackVersionView(APIView):
                 status=500,
             )
 
-        # Solo reemplaza lo ACTIVO
+        # Regla de negocio: solo 1 deployment activo por usuario.
+        # Reemplaza cualquier ACTIVE previo antes de activar la versión objetivo.
         Deployment.objects.filter(
             user=request.user,
             deleted_at__isnull=True,

@@ -6,6 +6,7 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import StatCard from "../../../components/StatCard";
 import { formatearFecha } from "../../../utils/formatters";
+import { showErrorAlert } from "../../../kernel/alerts";
 import UserService from "./service/UserService";
 import DeploymentService from "./service/DeploymentService";
 
@@ -23,21 +24,29 @@ export default function UserDashboard() {
 
   useEffect(() => {
     const cargarDatos = async () => {
-      try {
-        // Obtener perfil del usuario
-        const resultProfile = await UserService.getProfile();
-        if (resultProfile.ok) {
-          setProfile(resultProfile.data);
-        }
-
-        // Accesos recientes (una sola llamada paginada)
-        const resultLogs = await DeploymentService.getMyLogs({ page: 1, pageSize: 6 });
-        if (resultLogs.ok) setMisLogs(resultLogs.data);
-      } catch (error) {
-        console.error("Error cargando dashboard:", error);
-      } finally {
-        setLoading(false);
+      // Obtener perfil del usuario
+      const resultProfile = await UserService.getProfile();
+      if (resultProfile.ok) {
+        setProfile(resultProfile.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: resultProfile.message || "No se pudo cargar tu perfil.",
+        });
       }
+
+      // Accesos recientes (una sola llamada paginada)
+      const resultLogs = await DeploymentService.getMyLogs({ page: 1, pageSize: 6 });
+      if (resultLogs.ok) {
+        setMisLogs(resultLogs.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: resultLogs.message || "No se pudieron cargar los accesos recientes.",
+        });
+      }
+
+      setLoading(false);
     };
 
     cargarDatos();

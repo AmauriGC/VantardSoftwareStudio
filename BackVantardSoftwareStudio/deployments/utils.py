@@ -42,7 +42,8 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
 
     Reglas de negocio:
     - version_number incrementa globalmente por usuario.
-    - solo reemplaza (status=replaced) los deployments activos previos del usuario.
+    - solo puede existir 1 deployment activo por usuario a la vez.
+      Al crear uno nuevo, cualquier deployment previo en status=active del usuario pasa a status=replaced.
     - el dominio puede repetirse si pertenece al mismo usuario; si otro usuario lo usa, no disponible.
     - el ZIP siempre debe existir para crear.
     - tráfico: un nuevo upload inicia en 0.
@@ -103,7 +104,7 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
             )
             return failed_deployment
 
-        # Éxito: recién aquí reemplazamos SOLO los activos previos del usuario
+        # Éxito: recién aquí reemplazamos SOLO el/los activos previos del usuario
         (
             Deployment.objects.filter(user=user, status=Deployment.Status.ACTIVE, deleted_at__isnull=True)
             .update(status=Deployment.Status.REPLACED)

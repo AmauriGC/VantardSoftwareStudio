@@ -71,7 +71,6 @@ export default function AdminUsuarios() {
       }
       setUsuarios(result.data || []);
     } catch (error) {
-      console.error("Error cargando usuarios:", error);
       showErrorAlert({
         title: "Error al cargar usuarios",
         text: "No se pudieron cargar los usuarios desde el servidor.",

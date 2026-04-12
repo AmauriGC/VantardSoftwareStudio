@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import BaseCard from "../../../components/BaseCard";
 import BaseTable from "../../../components/BaseTable";
 import HttpBadge from "../../../components/HttpBadge";
+import { showErrorAlert } from "../../../kernel/alerts";
 import { formatearFecha } from "../../../utils/formatters";
 import DeploymentService from "./service/DeploymentService";
 
@@ -19,27 +20,30 @@ export default function UserLogs() {
   useEffect(() => {
     const cargarPagina = async () => {
       setLoading(true);
-      try {
-        const result = await DeploymentService.getMyLogs({
-          page,
-          pageSize: PAGE_SIZE,
-          q: busqueda.trim() || undefined,
+
+      const result = await DeploymentService.getMyLogs({
+        page,
+        pageSize: PAGE_SIZE,
+        q: busqueda.trim() || undefined,
+      });
+
+      if (result.ok) {
+        setLogs(result.data);
+        setTotal(result.meta?.total ?? result.data.length);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: result.message || "No se pudieron cargar los registros.",
         });
-        if (result.ok) {
-          setLogs(result.data);
-          setTotal(result.meta?.total ?? result.data.length);
-        }
-      } catch (error) {
-        console.error("Error cargando logs:", error);
-      } finally {
-        setLoading(false);
+        setLogs([]);
+        setTotal(0);
       }
+
+      setLoading(false);
     };
 
     cargarPagina();
   }, [page, busqueda]);
-
-  const filtrados = logs;
 
   const columns = [
     {
@@ -111,7 +115,7 @@ export default function UserLogs() {
         </div>
         <BaseTable
           columns={columns}
-          rows={filtrados}
+          rows={logs}
           emptyText="No se encontraron registros."
           loading={loading}
           pageSize={PAGE_SIZE}
