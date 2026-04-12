@@ -4,9 +4,11 @@ from django.conf import settings
 class Deployment(models.Model):
 
     class Status(models.TextChoices):
-        ACTIVE   = 'active',   'Active'
-        BLOCKED  = 'blocked',  'Blocked'
-        INACTIVE = 'inactive', 'Inactive'
+        ACTIVE   = 'active',   'Activo'
+        BLOCKED  = 'blocked',  'Bloqueado'
+        INACTIVE = 'inactive', 'Inactivo'
+        REPLACED = 'replaced', 'Reemplazado'
+        FAILED   = 'failed',   'Fallido'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -23,6 +25,29 @@ class Deployment(models.Model):
     site_url = models.CharField(
         max_length=255,
         db_column='site_url'
+    )
+
+    # Información de la última versión desplegada
+    version_number = models.IntegerField(
+        default=0,
+        db_column='version_number',
+        help_text='Número incremental de versión para este despliegue (comienza en 0 y se incrementa en cada subida de ZIP).'
+    )
+
+    zip_filename = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        db_column='zip_filename',
+        help_text='Nombre original del último ZIP subido.'
+    )
+
+    zip_path = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        db_column='zip_path',
+        help_text='Ruta (relativa a MEDIA_ROOT) del último ZIP subido.'
     )
 
     disk_used_mb = models.IntegerField(
@@ -49,8 +74,8 @@ class Deployment(models.Model):
     class Meta:
         db_table = 'deployments'
         ordering = ['-created_at']
-        verbose_name = 'Deployment'
-        verbose_name_plural = 'Deployments'
+        verbose_name = 'Despliegue'
+        verbose_name_plural = 'Despliegues'
         indexes = [
             models.Index(fields=['user'], name='idx_deployments_user_id'),
             models.Index(fields=['status'], name='idx_deployments_status'),
@@ -60,13 +85,3 @@ class Deployment(models.Model):
 
     def __str__(self):
         return f'{self.domain} ({self.user.email})'
-
-    @property
-    def is_deleted(self) -> bool:
-        return self.deleted_at is not None
-
-    def soft_delete(self):
-        from django.utils import timezone
-        self.deleted_at = timezone.now()
-        self.status = self.Status.INACTIVE
-        self.save(update_fields=['deleted_at', 'status', 'updated_at'])
