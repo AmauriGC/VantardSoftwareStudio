@@ -149,8 +149,7 @@ def complete_plan_change(request_id):
     
     # Marcar el plan actual como no vigente
     current_plan = request_obj.current_plan
-    current_plan.status = UserPlan.Status.EXPIRED
-    current_plan.save(update_fields=['status', 'updated_at'])
+    current_plan.cancel()
     
     # Crear nuevo UserPlan con el plan solicitado
     # Asumimos 1 mes de duración por defecto (esto puede variar según tu lógica)

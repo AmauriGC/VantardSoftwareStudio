@@ -6,6 +6,7 @@ class UserPlan(models.Model):
     class Status(models.TextChoices):
         ACTIVE  = 'active',  'Active'
         EXPIRED = 'expired', 'Expired'
+        CANCELLED = 'cancelled', 'Cancelled'
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -92,6 +93,12 @@ class UserPlan(models.Model):
         from django.utils import timezone
         delta = self.expiration_date - timezone.now()
         return max(delta.days, 0)
+
+    def cancel(self):
+
+        from django.utils import timezone
+        self.status = self.Status.CANCELLED
+        self.save(update_fields=['status', 'updated_at'])
 
     def soft_delete(self):
 

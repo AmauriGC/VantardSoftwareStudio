@@ -43,7 +43,7 @@ class PurchasePlanView(APIView):
         ).first()
 
         if active_plan:
-            active_plan.soft_delete()
+            active_plan.cancel()
 
           # Crear nueva suscripción
         now             = timezone.now()
@@ -144,7 +144,7 @@ class CancelPlanView(APIView):
                 status=404,
             )
 
-        user_plan.soft_delete()
+        user_plan.cancel()
         log_request(request, 'USER_PLAN_CANCEL', 200)
         return success_response(message='Suscripción cancelada correctamente.')
 

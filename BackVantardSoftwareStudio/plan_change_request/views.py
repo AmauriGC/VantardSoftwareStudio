@@ -164,7 +164,7 @@ class ApplyPlanChangeRequestNowView(APIView):
         current_plan = change_request.current_plan
         if current_plan and not current_plan.is_deleted and current_plan.status == UserPlan.Status.ACTIVE:
             # El usuario acepta perder los días restantes del plan actual.
-            current_plan.soft_delete()
+            current_plan.cancel()
 
         now     = timezone.now()
         months  = change_request.months_requested or 1

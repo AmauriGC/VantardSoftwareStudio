@@ -24,25 +24,6 @@ def get_plan_history(user_id: int):
         .filter(user_id=user_id)
         .order_by('-purchase_date')
     )
-
-def cancel_active_plans(user_id: int) -> int:
-
-    plans = UserPlan.objects.filter(
-        user_id=user_id,
-        status=UserPlan.Status.ACTIVE,
-        deleted_at__isnull=True
-    )
-    
-    count = plans.count()
-
-    plans.update(
-        status=UserPlan.Status.EXPIRED,
-        deleted_at=timezone.now(),
-        updated_at=timezone.now()
-    )
-    return count
-
-
 def user_has_active_plan(user_id: int) -> bool:
 
     return get_active_plan(user_id) is not None
