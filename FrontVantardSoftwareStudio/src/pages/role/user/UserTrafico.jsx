@@ -56,7 +56,6 @@ export default function UserTrafico() {
           setTraficoData([]);
         }
       } catch (error) {
-        console.error("Error cargando tráfico:", error);
         showErrorAlert({
           title: "Error",
           text: "No se pudieron cargar los datos de tráfico",

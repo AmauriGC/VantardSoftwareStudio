@@ -773,9 +773,10 @@ class RollbackVersionView(APIView):
                 status=500,
             )
 
-        # Solo reemplaza lo ACTIVO
+        # Solo reemplaza lo ACTIVO del mismo dominio
         Deployment.objects.filter(
             user=request.user,
+            domain=target_version.domain,
             deleted_at__isnull=True,
             status=Deployment.Status.ACTIVE,
         ).update(status=Deployment.Status.REPLACED)

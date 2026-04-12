@@ -39,7 +39,6 @@ export default function UserPlan() {
           setMisSolicitudes(resultRequests.data);
         }
       } catch (error) {
-        console.error("Error cargando datos de plan:", error);
         showErrorAlert({
           title: "Error",
           text: "No se pudieron cargar los datos del plan",
@@ -86,7 +85,6 @@ export default function UserPlan() {
         });
       }
     } catch (error) {
-      console.error("Error enviando solicitud:", error);
       showErrorAlert({
         title: "Error",
         text: "No se pudo enviar la solicitud",
