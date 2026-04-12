@@ -777,7 +777,6 @@ class RollbackVersionView(APIView):
         # Reemplaza cualquier ACTIVE previo antes de activar la versión objetivo.
         Deployment.objects.filter(
             user=request.user,
-            domain=target_version.domain,
             deleted_at__isnull=True,
             status=Deployment.Status.ACTIVE,
         ).update(status=Deployment.Status.REPLACED)
