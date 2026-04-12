@@ -157,32 +157,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'BackVantardSoftwareStudio.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-_database_url = config('DATABASE_URL', default='')
-if _database_url:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=_database_url,
-            conn_max_age=600,
-        )
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE':   'django.db.backends.mysql',
-            'NAME':     config('DB_NAME'),
-            'USER':     config('DB_USER'),
-            'PASSWORD': config('DB_PASSWORD'),
-            'HOST':     config('DB_HOST', default='localhost'),
-            'PORT':     config('DB_PORT', default='3306'),
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
-        }
-    }
+DATABASES = {
+    'default': dj_database_url.parse(
+        config('MYSQL_PUBLIC_URL'),
+        conn_max_age=600,
+    )
+}
 
 AUTH_USER_MODEL = 'users.User'
 
