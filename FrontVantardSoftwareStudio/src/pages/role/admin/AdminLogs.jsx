@@ -35,34 +35,39 @@ export default function AdminLogs() {
 
   const PAGE_SIZE = 10; // page_size fijo en backend para system_logs
 
+  // Carga el mapa de usuarios una sola vez al montar el componente
   useEffect(() => {
     let cancelled = false;
 
-    async function loadData() {
+    AdminUserService.listUsers().then((result) => {
+      if (cancelled || !result?.ok || !Array.isArray(result.data)) return;
+      const map = {};
+      for (const user of result.data) {
+        const id = user.id;
+        if (id == null) continue;
+        const baseName = `${user.nombre || ""} ${user.apellido || ""}`.trim();
+        map[id] = baseName || user.email || `ID ${id}`;
+      }
+      setUsersMap(map);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Carga los logs cada vez que cambia la página
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLogs() {
       setIsLoading(true);
       try {
-        const [usersResult, response] = await Promise.all([
-          AdminUserService.listUsers(),
-          axiosClient.get(ENDPOINTS.systemLogs.list, {
-            params: {
-              page,
-            },
-          }),
-        ]);
+        const response = await axiosClient.get(ENDPOINTS.systemLogs.list, {
+          params: { page },
+        });
 
         if (cancelled) return;
-
-        if (usersResult?.ok && Array.isArray(usersResult.data)) {
-          const map = {};
-          for (const user of usersResult.data) {
-            const id = user.id;
-            if (id == null) continue;
-            const baseName = `${user.nombre || ""} ${user.apellido || ""}`.trim();
-            const label = baseName || user.email || `ID ${id}`;
-            map[id] = label;
-          }
-          setUsersMap(map);
-        }
 
         const payload = response?.data?.data ?? {};
         const rawLogs = Array.isArray(payload.logs) ? payload.logs : [];
@@ -97,7 +102,7 @@ export default function AdminLogs() {
       }
     }
 
-    loadData();
+    loadLogs();
 
     return () => {
       cancelled = true;
