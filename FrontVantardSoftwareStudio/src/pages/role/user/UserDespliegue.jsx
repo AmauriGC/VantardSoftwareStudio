@@ -1,28 +1,70 @@
 import { Globe, HardDrive, Activity, UploadCloud, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseTable from "../../../components/BaseTable";
-import HttpBadge from "../../../components/HttpBadge";
 import { formatearFecha } from "../../../utils/formatters";
+import { showErrorAlert } from "../../../kernel/alerts";
 import DeploymentService from "./service/DeploymentService";
 
-const logColumns = [
-  { key: "ruta", header: "Ruta" },
-  { key: "metodo", header: "Método" },
-  { key: "ip", header: "IP" },
+const deploymentColumns = [
   {
-    key: "codigo",
-    header: "Código",
-    render: (l) => <HttpBadge codigo={l.codigo} />,
+    key: "actual",
+    header: "Actual",
+    render: (d) => (d.esActual ? "Sí" : "—"),
   },
   {
-    key: "fecha",
-    header: "Fecha",
+    key: "dominio",
+    header: "Dominio",
+    render: (d) => <span className="font-mono text-xs text-gray-800">{d.dominio}</span>,
+  },
+  {
+    key: "estado",
+    header: "Estado",
+    render: (d) => (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+          ESTADO_CLASES[d.estado] || "bg-gray-100 text-gray-600"
+        }`}
+      >
+        {d.estado}
+      </span>
+    ),
+  },
+  {
+    key: "disco",
+    header: "Disco",
     align: "right",
-    render: (l) => formatearFecha(l.fecha),
+    render: (d) => `${d.discoMb} MB`,
+  },
+  {
+    key: "trafico",
+    header: "Tráfico",
+    align: "right",
+    render: (d) => `${Number(d.trafico).toLocaleString("es-MX")} visitas`,
+  },
+  {
+    key: "creado",
+    header: "Creado",
+    align: "right",
+    render: (d) => formatearFecha(d.creadoEn),
+  },
+  {
+    key: "visitar",
+    header: "Sitio",
+    align: "right",
+    render: (d) => (
+      <a
+        href={d.siteUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        Visitar
+      </a>
+    ),
   },
 ];
 
@@ -30,52 +72,90 @@ const ESTADO_CLASES = {
   Activo: "bg-green-50 text-green-700",
   Actualizando: "bg-blue-50 text-blue-700",
   Error: "bg-red-50 text-red-700",
+  Fallido: "bg-red-50 text-red-700",
+  Bloqueado: "bg-gray-100 text-gray-600",
+  Inactivo: "bg-gray-100 text-gray-600",
+  Reemplazado: "bg-gray-100 text-gray-600",
   Suspendido: "bg-gray-100 text-gray-600",
 };
 
 export default function UserDespliegue() {
   const navigate = useNavigate();
   const [miDespliegue, setMiDespliegue] = useState(null);
-  const [logs, setLogs] = useState([]);
+  const [misDespliegues, setMisDespliegues] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [tablePage, setTablePage] = useState(1);
+  const [tableTotal, setTableTotal] = useState(0);
+  const TABLE_PAGE_SIZE = 10;
+
   useEffect(() => {
-    const cargarDatos = async () => {
+    let cancelled = false;
+
+    const cargarPagina = async () => {
       try {
-        // Obtener la lista de despliegues del usuario
-        const resultDeploy = await DeploymentService.listMyDeployments();
-        if (resultDeploy.ok && resultDeploy.data.length > 0) {
-          const primero = resultDeploy.data[0];
-          // Obtener el detalle completo del primer despliegue
-          const resultDetail = await DeploymentService.getDeployment(primero.id);
-          if (resultDetail.ok) {
-            setMiDespliegue(resultDetail.data);
-            // Obtener los logs del despliegue
-            const resultLogs = await DeploymentService.getLogs(primero.id);
-            if (resultLogs.ok) {
-              const normalizedLogs = (Array.isArray(resultLogs.data) ? resultLogs.data : []).map(
-                (item) => ({
-                  id: item.id,
-                  ruta: item.ruta ?? item.path ?? "-",
-                  metodo: item.metodo ?? item.method ?? "GET",
-                  ip: item.ip ?? item.client_ip ?? "-",
-                  codigo: item.codigo ?? item.status_code ?? 200,
-                  fecha: item.fecha ?? item.created_at ?? new Date().toISOString(),
-                })
-              );
-              setLogs(normalizedLogs);
-            }
-          }
+        const resultDeploy = await DeploymentService.listMyDeployments({ page: tablePage });
+        if (cancelled) return;
+
+        if (!resultDeploy.ok) {
+          showErrorAlert({
+            title: "Error",
+            text: resultDeploy.message || "No se pudieron cargar tus despliegues.",
+          });
+
+          setMisDespliegues([]);
+          setTableTotal(0);
+          if (tablePage === 1) setMiDespliegue(null);
+          return;
         }
-      } catch (error) {
-        console.error("Error cargando despliegue:", error);
+
+        setMisDespliegues(resultDeploy.data);
+        setTableTotal(resultDeploy.meta?.total ?? resultDeploy.data.length);
+
+        // La página 1 resuelve el despliegue actual (activo) y la primera página de la tabla.
+        if (tablePage !== 1) return;
+
+        if (resultDeploy.data.length === 0) {
+          setMiDespliegue(null);
+          return;
+        }
+
+        const activo = resultDeploy.data.find(
+          (d) => String(d.status ?? d.estado ?? "").toLowerCase() === "active"
+        );
+        const actual = activo ?? resultDeploy.data[0];
+
+        const resultDetail = await DeploymentService.getDeployment(actual.id);
+        if (cancelled) return;
+
+        if (resultDetail.ok) {
+          setMiDespliegue(resultDetail.data);
+        } else {
+          showErrorAlert({
+            title: "Error",
+            text: resultDetail.message || "No se pudo cargar el detalle del despliegue.",
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        showErrorAlert({
+          title: "Error",
+          text: "No se pudieron cargar tus despliegues.",
+        });
+        setMisDespliegues([]);
+        setTableTotal(0);
+        if (tablePage === 1) setMiDespliegue(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    cargarDatos();
-  }, []);
+    cargarPagina();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tablePage]);
 
   if (loading) {
     return (
@@ -122,19 +202,43 @@ export default function UserDespliegue() {
   const statusRaw = miDespliegue.status ?? miDespliegue.estado ?? "active";
   const statusLabelMap = {
     active: "Activo",
+    blocked: "Bloqueado",
+    inactive: "Inactivo",
+    replaced: "Reemplazado",
+    failed: "Fallido",
     updating: "Actualizando",
     error: "Error",
-    inactive: "Suspendido",
   };
   const statusLabel = statusLabelMap[String(statusRaw).toLowerCase()] ?? statusRaw;
   const diskUsedMb =
     miDespliegue.disk_used_mb ?? miDespliegue.used_disk_mb ?? miDespliegue.usoDiscoMB ?? 0;
-  const trafficCount = miDespliegue.traffic_count ?? miDespliegue.trafico ?? 0;
+  const trafficCount = miDespliegue.traffic_visit_count ?? miDespliegue.trafico ?? 0;
   const createdAt = miDespliegue.created_at ?? miDespliegue.creadoEn ?? "-";
   const siteUrl =
     miDespliegue.site_url ??
     miDespliegue.siteUrl ??
     (String(domain).includes(".") ? `https://${domain}` : `https://${domain}.vss.app`);
+
+  const normalizedDeployments = (Array.isArray(misDespliegues) ? misDespliegues : []).map((d) => {
+    const dDomain = d.domain ?? d.dominio ?? "-";
+    const dStatusRaw = d.status ?? d.estado ?? "inactive";
+    const dStatusLabel = statusLabelMap[String(dStatusRaw).toLowerCase()] ?? dStatusRaw;
+    const dSiteUrl =
+      d.site_url ??
+      d.siteUrl ??
+      (String(dDomain).includes(".") ? `https://${dDomain}` : `https://${dDomain}.vss.app`);
+
+    return {
+      id: d.id,
+      esActual: Number(d.id) === Number(miDespliegue.id),
+      dominio: dDomain,
+      estado: dStatusLabel,
+      discoMb: d.disk_used_mb ?? d.used_disk_mb ?? d.usoDiscoMB ?? 0,
+      trafico: d.traffic_visit_count ?? d.trafico ?? 0,
+      creadoEn: d.created_at ?? d.creadoEn ?? "-",
+      siteUrl: dSiteUrl,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -213,16 +317,19 @@ export default function UserDespliegue() {
         </div>
       </BaseCard>
 
-      {/* Registros de acceso */}
+      {/* Mis despliegues */}
       <BaseCard className="overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900">Registros de acceso</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Mis despliegues</h2>
         </div>
         <BaseTable
-          columns={logColumns}
-          rows={logs}
-          emptyText="Sin registros de acceso aún."
-          pageSize={0}
+          columns={deploymentColumns}
+          rows={normalizedDeployments}
+          emptyText="Sin despliegues aún."
+          pageSize={TABLE_PAGE_SIZE}
+          page={tablePage}
+          totalRows={tableTotal}
+          onPageChange={(nextPage) => setTablePage(nextPage)}
         />
       </BaseCard>
     </div>

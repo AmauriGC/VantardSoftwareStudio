@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -25,12 +25,32 @@ export default function BaseTable({
   loading = false,
   emptyText = "Sin resultados.",
   pageSize = PAGE_SIZE_DEFAULT,
+  page: controlledPage,
+  totalRows,
+  onPageChange,
 }) {
+  const isServerPaginated =
+    typeof controlledPage === "number" &&
+    typeof totalRows === "number" &&
+    typeof onPageChange === "function";
+
   const [page, setPage] = useState(1);
+  const totalCount = isServerPaginated ? totalRows : rows.length;
 
   const paginated = pageSize > 0;
-  const totalPages = paginated ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
-  const visibleRows = paginated ? rows.slice((page - 1) * pageSize, page * pageSize) : rows;
+  const totalPages = useMemo(
+    () => (paginated ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1),
+    [paginated, totalCount, pageSize]
+  );
+
+  const clientPage = paginated ? Math.min(Math.max(page, 1), totalPages) : 1;
+  const currentPage = isServerPaginated ? controlledPage : clientPage;
+
+  const visibleRows = isServerPaginated
+    ? rows
+    : paginated
+      ? rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+      : rows;
 
   const alignClass = {
     left: "text-left",
@@ -115,27 +135,36 @@ export default function BaseTable({
       {paginated && totalPages > 1 && !loading && (
         <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
           <p className="text-xs text-gray-500">
-            {rows.length === 0
+            {totalCount === 0
               ? "0 resultados"
-              : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, rows.length)} de ${rows.length}`}
+              : `${(currentPage - 1) * pageSize + 1}–${Math.min(
+                  (currentPage - 1) * pageSize + visibleRows.length,
+                  totalCount
+                )} de ${totalCount}`}
           </p>
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
+              onClick={() => {
+                if (isServerPaginated) onPageChange(Math.max(1, currentPage - 1));
+                else setPage((p) => Math.max(1, p - 1));
+              }}
+              disabled={currentPage === 1}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
               aria-label="Página anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <span className="text-xs text-gray-700 px-1">
-              {page} / {totalPages}
+              {currentPage} / {totalPages}
             </span>
             <button
               type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
+              onClick={() => {
+                if (isServerPaginated) onPageChange(Math.min(totalPages, currentPage + 1));
+                else setPage((p) => Math.min(totalPages, p + 1));
+              }}
+              disabled={currentPage === totalPages}
               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-40 disabled:pointer-events-none transition-colors"
               aria-label="Página siguiente"
             >
@@ -161,4 +190,7 @@ BaseTable.propTypes = {
   loading: PropTypes.bool,
   emptyText: PropTypes.string,
   pageSize: PropTypes.number,
+  page: PropTypes.number,
+  totalRows: PropTypes.number,
+  onPageChange: PropTypes.func,
 };

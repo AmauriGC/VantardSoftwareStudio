@@ -46,7 +46,7 @@ export default function UserTrafico() {
   useEffect(() => {
     const cargarInicial = async () => {
       try {
-        const resultDeploy = await DeploymentService.listMyDeployments();
+        const resultDeploy = await DeploymentService.listMyDeployments({ page: 1, pageSize: 200 });
         if (resultDeploy.ok && resultDeploy.data.length > 0) {
           setDeployments(resultDeploy.data);
           setSelectedDeploymentId(resultDeploy.data[0].id);
@@ -56,7 +56,6 @@ export default function UserTrafico() {
           setTraficoData([]);
         }
       } catch (error) {
-        console.error("Error cargando tráfico:", error);
         showErrorAlert({
           title: "Error",
           text: "No se pudieron cargar los datos de tráfico",

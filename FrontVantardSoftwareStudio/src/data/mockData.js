@@ -316,7 +316,7 @@ export const planes = [
     nombre: "Básico",
     precio: 0,
     discoMaxMB: 50,
-    cargaMaxMB: 5,
+    cargaMaxMB: 10,
     habilitado: true,
   },
   {

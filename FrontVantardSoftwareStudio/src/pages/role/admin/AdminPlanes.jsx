@@ -72,7 +72,6 @@ export default function AdminPlanes() {
           }, {})
         );
       } catch (error) {
-        console.error("Error cargando planes:", error);
         showErrorAlert({
           title: "Error al cargar planes",
           text: "No se pudieron cargar los planes desde el servidor.",
@@ -125,7 +124,6 @@ export default function AdminPlanes() {
 
       setSolicitudes(mapped);
     } catch (error) {
-      console.error("Error cargando solicitudes de cambio de plan:", error);
       showErrorAlert({
         title: "Error al cargar solicitudes",
         text: "No se pudieron cargar las solicitudes de cambio de plan.",
@@ -237,7 +235,6 @@ export default function AdminPlanes() {
         );
       }
     } catch (error) {
-      console.error("Error actualizando planes:", error);
       showErrorAlert({
         title: "Error",
         text: "Ocurrió un error al actualizar los planes.",
@@ -288,7 +285,6 @@ export default function AdminPlanes() {
 
       await cargarSolicitudes();
     } catch (error) {
-      console.error("Error aprobando solicitud de plan:", error);
       showErrorAlert({
         title: "Error al aprobar",
         text: "Ocurrió un error al aprobar la solicitud.",
@@ -319,7 +315,6 @@ export default function AdminPlanes() {
 
       await cargarSolicitudes();
     } catch (error) {
-      console.error("Error rechazando solicitud de plan:", error);
       showErrorAlert({
         title: "Error al rechazar",
         text: "Ocurrió un error al rechazar la solicitud.",

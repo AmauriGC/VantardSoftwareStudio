@@ -1,12 +1,12 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloud, FileArchive, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
-import { usuarioActual, planes } from "../../../data/mockData";
 import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
 import DeploymentService from "./service/DeploymentService";
+import UserService from "./service/UserService";
 
 export default function UserNuevoDespliegue() {
   const navigate = useNavigate();
@@ -16,20 +16,28 @@ export default function UserNuevoDespliegue() {
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const planActual = planes.find((p) => p.nombre === usuarioActual.plan) || planes[0];
-  const limiteKB = planActual.cargaMaxMB * 1024;
+  const [profile, setProfile] = useState(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+
+  useEffect(() => {
+    const cargarPerfil = async () => {
+      try {
+        const result = await UserService.getProfile();
+        if (result.ok) setProfile(result.data);
+      } finally {
+        setIsProfileLoading(false);
+      }
+    };
+
+    cargarPerfil();
+  }, []);
+
+  const planName = profile?.plan_name || profile?.plan || "-";
 
   const handleArchivo = (file) => {
     if (!file) return;
     if (!file.name.endsWith(".zip")) {
       showErrorAlert({ title: "Formato incorrecto", text: "Solo se aceptan archivos .zip" });
-      return;
-    }
-    if (file.size > limiteKB * 1024) {
-      showErrorAlert({
-        title: "Archivo demasiado grande",
-        text: `Tu plan permite archivos de hasta ${planActual.cargaMaxMB} MB.`,
-      });
       return;
     }
     setArchivo(file);
@@ -58,57 +66,26 @@ export default function UserNuevoDespliegue() {
 
     setIsSubmitting(true);
 
-    const myDeploymentsResult = await DeploymentService.listMyDeployments();
-    if (!myDeploymentsResult.ok) {
-      showErrorAlert({
-        title: "No se pudo validar tu despliegue",
-        text: myDeploymentsResult.message || "Intenta nuevamente.",
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
-    const existingDeployment = myDeploymentsResult.data.find(
-      (item) => String(item?.domain ?? "").toLowerCase() === normalizedDomain
-    );
-
-    let deploymentId = existingDeployment?.id ?? null;
-    let createdNewDeployment = false;
-
-    if (!deploymentId) {
-      const createResult = await DeploymentService.createDeployment({ domain: normalizedDomain });
-      if (!createResult.ok) {
-        showErrorAlert({
-          title: "No se pudo crear el despliegue",
-          text: createResult.message || "Intenta nuevamente.",
-        });
-        setIsSubmitting(false);
-        return;
-      }
-      deploymentId = createResult.data?.id ?? null;
-      createdNewDeployment = true;
-    }
-
-    const uploadResult = await DeploymentService.uploadVersion({
-      deploymentId,
+    const createResult = await DeploymentService.createDeployment({
+      domain: normalizedDomain,
       zipFile: archivo,
     });
 
-    if (!uploadResult.ok) {
+    if (!createResult.ok) {
       showErrorAlert({
-        title: "No se pudo subir la version",
-        text: uploadResult.message || "Intenta nuevamente.",
+        title: "No se pudo desplegar tu sitio",
+        text: createResult.message || "Intenta nuevamente.",
       });
       setIsSubmitting(false);
       return;
     }
 
-    const versionNumber = uploadResult.data?.version_number;
+    const versionNumber = createResult.data?.version_number;
     const versionText = versionNumber ? `Version ${versionNumber} publicada.` : "Version publicada.";
 
     setIsSubmitting(false);
     await showSuccessAlert({
-      title: createdNewDeployment ? "Despliegue creado" : "Version actualizada",
+      title: "Despliegue creado",
       text: `Tu sitio "${normalizedDomain}.vss.app" fue procesado correctamente. ${versionText}`,
     });
     navigate("/user/despliegue");
@@ -130,11 +107,13 @@ export default function UserNuevoDespliegue() {
           <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <UploadCloud className="h-4 w-4" />
           </div>
-          <p className="text-sm text-gray-700">
-            Tu plan <span className="font-semibold">{usuarioActual.plan}</span> permite cargas de
-            hasta{" "}
-            <span className="font-semibold">{planActual.cargaMaxMB} MB</span> por archivo.
-          </p>
+          {isProfileLoading ? (
+            <p className="text-sm text-gray-700">Cargando información de tu plan...</p>
+          ) : (
+            <p className="text-sm text-gray-700">
+              Tu plan actual es <span className="font-semibold">{planName}</span>.
+            </p>
+          )}
         </div>
       </BaseCard>
 
@@ -164,9 +143,6 @@ export default function UserNuevoDespliegue() {
               </div>
               <p className="text-xs text-gray-400 mt-1">
                 Solo letras minúsculas, números y guiones.
-              </p>
-              <p className="text-xs text-blue-600 mt-1">
-                Si el dominio ya existe, se sube una nueva version al mismo despliegue.
               </p>
             </div>
           </div>
@@ -208,9 +184,7 @@ export default function UserNuevoDespliegue() {
                 Arrastra tu archivo aquí o{" "}
                 <span className="text-blue-600">haz clic para seleccionar</span>
               </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Solo archivos .zip — máximo {planActual.cargaMaxMB} MB
-              </p>
+              <p className="text-xs text-gray-400 mt-1">Solo archivos .zip</p>
             </div>
           </button>
 

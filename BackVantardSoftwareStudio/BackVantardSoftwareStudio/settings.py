@@ -120,7 +120,6 @@ INSTALLED_APPS = [
     'users',
     'plans',
     'deployments',
-    'deployment_version',
     'user_plans',
     'plan_change_request',
     'roles'

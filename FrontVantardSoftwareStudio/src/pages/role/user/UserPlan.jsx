@@ -39,7 +39,6 @@ export default function UserPlan() {
           setMisSolicitudes(resultRequests.data);
         }
       } catch (error) {
-        console.error("Error cargando datos de plan:", error);
         showErrorAlert({
           title: "Error",
           text: "No se pudieron cargar los datos del plan",
@@ -86,7 +85,6 @@ export default function UserPlan() {
         });
       }
     } catch (error) {
-      console.error("Error enviando solicitud:", error);
       showErrorAlert({
         title: "Error",
         text: "No se pudo enviar la solicitud",
@@ -167,19 +165,12 @@ export default function UserPlan() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 text-sm">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 text-sm">
           <div className="flex items-center gap-2">
             <HardDrive className="h-4 w-4 text-gray-400 shrink-0" />
             <div>
               <p className="text-xs text-gray-500">Disco máximo</p>
               <p className="font-medium text-gray-900">{planActual?.max_disk_mb || planActual?.discoMaxMB || 0} MB</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <UploadCloud className="h-4 w-4 text-gray-400 shrink-0" />
-            <div>
-              <p className="text-xs text-gray-500">Carga máxima</p>
-              <p className="font-medium text-gray-900">{planActual?.max_upload_mb || planActual?.cargaMaxMB || 0} MB</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -225,10 +216,6 @@ export default function UserPlan() {
                   <li className="flex items-center gap-2 text-gray-600">
                     <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
                     {p.max_disk_mb || p.discoMaxMB} MB de almacenamiento
-                  </li>
-                  <li className="flex items-center gap-2 text-gray-600">
-                    <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                    Carga hasta {p.max_upload_mb || p.cargaMaxMB} MB
                   </li>
                   <li className="flex items-center gap-2 text-gray-600">
                     <Check className="h-3.5 w-3.5 text-green-600 shrink-0" />

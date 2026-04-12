@@ -6,6 +6,7 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import StatCard from "../../../components/StatCard";
 import { formatearFecha } from "../../../utils/formatters";
+import { showErrorAlert } from "../../../kernel/alerts";
 import UserService from "./service/UserService";
 import DeploymentService from "./service/DeploymentService";
 
@@ -18,39 +19,34 @@ function getColorBarra(pct) {
 export default function UserDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
-  const [misDespliegues, setMisDespliegues] = useState([]);
   const [misLogs, setMisLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
-      try {
-        // Obtener perfil del usuario
-        const resultProfile = await UserService.getProfile();
-        if (resultProfile.ok) {
-          setProfile(resultProfile.data);
-        }
-
-        // Obtener lista de despliegues
-        const resultDeploy = await DeploymentService.listMyDeployments();
-        if (resultDeploy.ok) {
-          setMisDespliegues(resultDeploy.data);
-
-          // Obtener logs de todos los despliegues
-          const allLogs = [];
-          for (const deployment of resultDeploy.data) {
-            const resultLogs = await DeploymentService.getLogs(deployment.id);
-            if (resultLogs.ok) {
-              allLogs.push(...resultLogs.data);
-            }
-          }
-          setMisLogs(allLogs);
-        }
-      } catch (error) {
-        console.error("Error cargando dashboard:", error);
-      } finally {
-        setLoading(false);
+      // Obtener perfil del usuario
+      const resultProfile = await UserService.getProfile();
+      if (resultProfile.ok) {
+        setProfile(resultProfile.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: resultProfile.message || "No se pudo cargar tu perfil.",
+        });
       }
+
+      // Accesos recientes (una sola llamada paginada)
+      const resultLogs = await DeploymentService.getMyLogs({ page: 1, pageSize: 6 });
+      if (resultLogs.ok) {
+        setMisLogs(resultLogs.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: resultLogs.message || "No se pudieron cargar los accesos recientes.",
+        });
+      }
+
+      setLoading(false);
     };
 
     cargarDatos();
@@ -75,7 +71,7 @@ export default function UserDashboard() {
   const discoPercent = profile.plan_max_disk_mb > 0
     ? Math.round((profile.used_disk_mb / profile.plan_max_disk_mb) * 100)
     : 0;
-  const traficoTotal = misDespliegues.reduce((acc, d) => acc + (d.traffic_count || 0), 0);
+  const traficoTotal = Number(profile.total_traffic_visit_count ?? 0);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -98,7 +94,6 @@ export default function UserDashboard() {
         <StatCard
           title="Plan actual"
           value={profile.plan_name || profile.plan || "Gratis"}
-          description={`Hasta ${profile.plan_max_upload_mb || 0} MB por carga`}
           icon={<CreditCard className="h-4 w-4" />}
         />
         <StatCard
@@ -129,20 +124,19 @@ export default function UserDashboard() {
           <span>{profile.plan_max_disk_mb || 0} MB totales</span>
         </div>
         <div className="flex flex-col gap-2">
-          {misDespliegues.map((d) => (
-            <div key={d.id} className="flex items-center justify-between text-sm">
+          {profile.active_site_domain ? (
+            <div className="flex items-center justify-between text-sm">
               <button
                 type="button"
                 onClick={() => navigate("/user/despliegue")}
                 className="text-blue-600 hover:text-blue-700 font-mono text-xs hover:underline"
               >
-                {d.domain || d.dominio}
+                {profile.active_site_domain}
               </button>
-              <span className="text-gray-500">{d.used_disk_mb || d.usoDiscoMB || 0} MB</span>
+              <span className="text-gray-500">{profile.active_site_disk_used_mb ?? profile.used_disk_mb ?? 0} MB</span>
             </div>
-          ))}
-          {misDespliegues.length === 0 && (
-            <p className="text-xs text-gray-400">Sin despliegues aún.</p>
+          ) : (
+            <p className="text-xs text-gray-400">Sin despliegue activo aún.</p>
           )}
         </div>
       </BaseCard>
