@@ -2,10 +2,9 @@ from rest_framework import serializers
 from .models import Deployment
 from .utils import is_valid_domain
 
-
-  # ---------------------------------------------------------------------------
-  # Crear deployment (entrada)
-  # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Crear deployment (entrada)
+# ---------------------------------------------------------------------------
 
 class DeploymentCreateSerializer(serializers.Serializer):
     domain = serializers.CharField(max_length=100)
@@ -19,45 +18,38 @@ class DeploymentCreateSerializer(serializers.Serializer):
                 'No puede empezar ni terminar con guión.'
             )
 
-        if Deployment.objects.filter(domain=value, deleted_at__isnull=True).exists():
-            raise serializers.ValidationError('Este dominio ya está en uso.')
+        # Regla de negocio:
+        # - Un dominio puede tener muchas versiones para el MISMO usuario.
+        # - El dominio NO puede ser usado por otro usuario.
+        user = self.context.get('user')
+        qs = Deployment.objects.filter(domain=value, deleted_at__isnull=True)
+
+        if user is not None:
+            # Si existe el dominio para otro usuario distinto, no está disponible.
+            if qs.exclude(user=user).exists():
+                raise serializers.ValidationError('Este dominio no está disponible.')
+        else:
+            # Fallback conservador si no se pasó el usuario en el contexto.
+            if qs.exists():
+                raise serializers.ValidationError('Este dominio no está disponible.')
 
         return value
 
-
-  # ---------------------------------------------------------------------------
-  # Actualizar deployment (entrada)
-  # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Actualizar deployment (entrada)
+# ---------------------------------------------------------------------------
 
 class DeploymentUpdateSerializer(serializers.Serializer):
-    domain = serializers.CharField(max_length=100, required=False)
     status = serializers.ChoiceField(choices=Deployment.Status.choices, required=False)
-
-    def validate_domain(self, value):
-        value = value.strip().lower()
-
-        if not is_valid_domain(value):
-            raise serializers.ValidationError(
-                'El dominio solo puede contener letras minúsculas, números y guiones.'
-            )
-
-        qs = Deployment.objects.filter(domain=value, deleted_at__isnull=True)
-        if self.context.get('instance'):
-            qs = qs.exclude(pk=self.context['instance'].pk)
-        if qs.exists():
-            raise serializers.ValidationError('Este dominio ya está en uso.')
-
-        return value
 
     def validate(self, attrs):
         if not attrs:
             raise serializers.ValidationError('Debes enviar al menos un campo para actualizar.')
         return attrs
 
-
-  # ---------------------------------------------------------------------------
-  # Salida del usuario
-  # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Salida del usuario
+# ---------------------------------------------------------------------------
 
 class DeploymentOutputSerializer(serializers.ModelSerializer):
     class Meta:
@@ -73,10 +65,9 @@ class DeploymentOutputSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
 
-
-  # ---------------------------------------------------------------------------
-  # Admin – salida con datos del usuario
-  # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Admin – salida con datos del usuario
+# ---------------------------------------------------------------------------
 
 class AdminDeploymentOutputSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email')
@@ -100,4 +91,4 @@ class AdminDeploymentOutputSerializer(serializers.ModelSerializer):
     def get_user_name(self, obj):
         return obj.user.full_name
     
-    
+
