@@ -21,17 +21,12 @@ export const ENDPOINTS = {
   },
   deployments: {
     list: "/api/deployments/",
+    adminList: "/api/deployments/admin/all/",
+    adminUpdateStatus: (id) => `/api/deployments/admin/${id}/status/`,
     detail: (id) => `/api/deployments/${id}/`,
     logs: (id) => `/api/deployments/${id}/logs/`,
+    myLogs: "/api/deployments/logs/",
     traffic: "/api/deployments/traffic/",
-    trafficSummary: "/api/deployments/traffic/summary/",
-  },
-  deploymentVersions: {
-    upload: (deploymentId) => `/api/deployment-versions/${deploymentId}/upload/`,
-    list: (deploymentId) => `/api/deployment-versions/${deploymentId}/`,
-    detail: (deploymentId, versionId) => `/api/deployment-versions/${deploymentId}/${versionId}/`,
-    rollback: (deploymentId, versionId) =>
-      `/api/deployment-versions/${deploymentId}/${versionId}/rollback/`,
   },
   plans: {
     list: "/api/plans/",

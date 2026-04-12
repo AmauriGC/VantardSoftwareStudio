@@ -159,8 +159,8 @@ export default function RegisterPage() {
         <div className="w-full rounded-xl border border-gray-200 bg-gray-50 p-4">
           <p className="text-sm font-semibold text-gray-900">Plan por defecto</p>
           <p className="mt-1 text-sm text-gray-700">
-            Todas las cuentas nuevas inician en el plan Basic gratuito (50MB de almacenamiento, 5MB de
-            límite de subida). Las mejoras se asignan por un admin después de confirmar el pago.
+            Todas las cuentas nuevas inician en el plan Basic gratuito (50MB de almacenamiento).
+            Las mejoras se asignan por un admin después de confirmar el pago.
           </p>
         </div>
 
