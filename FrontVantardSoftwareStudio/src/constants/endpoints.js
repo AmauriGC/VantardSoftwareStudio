@@ -42,4 +42,8 @@ export const ENDPOINTS = {
     adminApprove: (id) => `/api/plan-change-requests/admin/${id}/approve/`,
     adminReject: (id) => `/api/plan-change-requests/admin/${id}/reject/`,
   },
+  systemLogs: {
+    list: "/api/system-logs/",
+    detail: (id) => `/api/system-logs/${id}/`,
+  },
 };

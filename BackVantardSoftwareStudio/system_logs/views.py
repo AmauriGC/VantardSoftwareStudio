@@ -51,7 +51,7 @@ class SystemLogListView(APIView):
         # --- Paginacion manual con DRF ---
         from rest_framework.pagination import PageNumberPagination
         paginator = PageNumberPagination()
-        paginator.page_size = 20
+        paginator.page_size = 10
         page = paginator.paginate_queryset(qs, request)
 
         serializer = SystemLogOutputSerializer(page, many=True)
