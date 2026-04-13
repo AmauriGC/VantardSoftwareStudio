@@ -9,7 +9,7 @@ class PlanStatus(models.TextChoices):
 
 class Plan(models.Model):
 
-    Status = PlanStatus
+    StatusChoices = PlanStatus
 
     name = models.CharField(
         max_length=50,
@@ -32,8 +32,8 @@ class Plan(models.Model):
 
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.ACTIVE,
+        choices=StatusChoices.choices,
+        default=StatusChoices.ACTIVE,
         db_column='status',
     )
     
@@ -76,5 +76,5 @@ class Plan(models.Model):
         
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status     = self.Status.INACTIVE
+        self.status     = self.StatusChoices.INACTIVE
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])

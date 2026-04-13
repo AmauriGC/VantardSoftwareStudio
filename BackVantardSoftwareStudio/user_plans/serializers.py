@@ -15,7 +15,7 @@ class PurchasePlanSerializer(serializers.Serializer):
 
     def validate_plan_id(self, value):
         try:
-            Plan.objects.get(pk=value, status=Plan.Status.ACTIVE, deleted_at__isnull=True)
+            Plan.objects.get(pk=value, status=Plan.StatusChoices.ACTIVE, deleted_at__isnull=True)
         except Plan.DoesNotExist:
             raise serializers.ValidationError('El plan no existe o no está disponible.')
         return value

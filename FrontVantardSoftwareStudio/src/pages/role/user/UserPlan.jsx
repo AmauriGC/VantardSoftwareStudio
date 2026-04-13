@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, CreditCard, HardDrive, UploadCloud } from "lucide-react";
+import { Check, CreditCard, HardDrive } from "lucide-react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
@@ -39,6 +39,7 @@ export default function UserPlan() {
           setMisSolicitudes(resultRequests.data);
         }
       } catch (error) {
+        console.error(error);
         showErrorAlert({
           title: "Error",
           text: "No se pudieron cargar los datos del plan",
@@ -64,7 +65,7 @@ export default function UserPlan() {
     try {
       const result = await UserService.requestPlanChange({
         plan_id: planSeleccionado.id,
-        months: parseInt(meses, 10),
+        months: Number.parseInt(meses, 10),
       });
 
       if (result.ok) {
@@ -85,6 +86,7 @@ export default function UserPlan() {
         });
       }
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error",
         text: "No se pudo enviar la solicitud",

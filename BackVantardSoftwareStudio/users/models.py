@@ -10,7 +10,7 @@ class UserStatus(models.TextChoices):
 
 class User(AbstractBaseUser, PermissionsMixin):
 
-    Status = UserStatus
+    StatusChoices = UserStatus
 
     first_name = models.CharField(
         max_length=100,
@@ -45,8 +45,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.ACTIVE,
+        choices=StatusChoices.choices,
+        default=StatusChoices.ACTIVE,
         db_column='status',
     )
 
@@ -96,7 +96,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status     = self.Status.BLOCKED
+        self.status     = self.StatusChoices.BLOCKED
         self.is_active  = False
         self.save(update_fields=['deleted_at', 'status', 'is_active', 'updated_at'])
         

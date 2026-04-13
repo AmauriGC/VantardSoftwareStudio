@@ -53,11 +53,13 @@ export default class UserService {
     try {
       const response = await axiosClient.get(ENDPOINTS.plans.list);
       const payload = response?.data?.data ?? response?.data ?? [];
-      const plans = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.plans)
-          ? payload.plans
-          : [];
+
+      let plans = [];
+      if (Array.isArray(payload)) {
+        plans = payload;
+      } else if (Array.isArray(payload?.plans)) {
+        plans = payload.plans;
+      }
       return { ok: true, data: plans };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
@@ -69,15 +71,17 @@ export default class UserService {
     try {
       const response = await axiosClient.get(ENDPOINTS.planChangeRequests.mine);
       const payload = response?.data?.data ?? response?.data ?? [];
-      const rawRequests = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.solicitudes)
-          ? payload.solicitudes
-          : Array.isArray(payload?.requests)
-            ? payload.requests
-            : Array.isArray(payload?.plan_requests)
-              ? payload.plan_requests
-              : [];
+
+      let rawRequests = [];
+      if (Array.isArray(payload)) {
+        rawRequests = payload;
+      } else if (Array.isArray(payload?.solicitudes)) {
+        rawRequests = payload.solicitudes;
+      } else if (Array.isArray(payload?.requests)) {
+        rawRequests = payload.requests;
+      } else if (Array.isArray(payload?.plan_requests)) {
+        rawRequests = payload.plan_requests;
+      }
 
       const statusMap = {
         pending: "Pendiente",

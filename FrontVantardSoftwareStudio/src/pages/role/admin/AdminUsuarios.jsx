@@ -71,6 +71,7 @@ export default function AdminUsuarios() {
       }
       setUsuarios(result.data || []);
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error al cargar usuarios",
         text: "No se pudieron cargar los usuarios desde el servidor.",
@@ -249,6 +250,74 @@ export default function AdminUsuarios() {
 
   const desplieguesDelUsuario = [];
 
+  let usuariosTableBody;
+  if (loading) {
+    usuariosTableBody = (
+      <tr>
+        <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+          Cargando usuarios...
+        </td>
+      </tr>
+    );
+  } else if (filtrados.length === 0) {
+    usuariosTableBody = (
+      <tr>
+        <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+          No se encontraron usuarios.
+        </td>
+      </tr>
+    );
+  } else {
+    usuariosTableBody = filtrados.map((u) => (
+      <tr
+        key={u.id}
+        className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+      >
+        <td className="py-3 px-4 font-medium text-gray-900">{u.nombre}</td>
+        <td className="py-3 px-4 text-gray-500">{u.apellido}</td>
+        <td className="py-3 px-4 text-gray-500">{u.email}</td>
+        <td className="py-3 px-4">
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={u.status === "active"}
+              onChange={() => handleToggleStatus(u)}
+              disabled={updatingStatusId === u.id}
+            />
+            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+            <span className="ml-2 text-xs text-gray-600">{u.estadoCuenta}</span>
+          </label>
+        </td>
+        <td className="py-3 px-4 text-gray-500">{u.rol}</td>
+        <td className="py-3 px-4 text-gray-500">{u.plan}</td>
+        <td className="py-3 px-4 text-gray-500">{u.totalDespliegues}</td>
+        <td className="py-3 px-4">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => abrirModal("ver", u)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label="Ver detalle"
+              title="Ver detalle"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => abrirModal("editar", u)}
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              aria-label="Editar"
+              title="Editar"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    ));
+  }
+
   return (
     <div className="flex flex-col gap-6 p-6">
       {/* Encabezado */}
@@ -299,68 +368,7 @@ export default function AdminUsuarios() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
-                    Cargando usuarios...
-                  </td>
-                </tr>
-              ) : filtrados.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
-                    No se encontraron usuarios.
-                  </td>
-                </tr>
-              ) : (
-                filtrados.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="py-3 px-4 font-medium text-gray-900">{u.nombre}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.apellido}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.email}</td>
-                    <td className="py-3 px-4">
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={u.status === "active"}
-                          onChange={() => handleToggleStatus(u)}
-                          disabled={updatingStatusId === u.id}
-                        />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                        <span className="ml-2 text-xs text-gray-600">{u.estadoCuenta}</span>
-                      </label>
-                    </td>
-                    <td className="py-3 px-4 text-gray-500">{u.rol}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.plan}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.totalDespliegues}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => abrirModal("ver", u)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                          aria-label="Ver detalle"
-                          title="Ver detalle"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => abrirModal("editar", u)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-                          aria-label="Editar"
-                          title="Editar"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+              {usuariosTableBody}
             </tbody>
           </table>
         </div>

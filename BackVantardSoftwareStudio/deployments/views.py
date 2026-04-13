@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 
 DEPLOYMENT_NOT_FOUND = 'Despliegue no encontrado.'
+VERSION_NOT_FOUND = 'Versión no encontrada.'
+DEFAULT_INDEX_FILE = 'index.html'
 
 
 class _DefaultPagination(PageNumberPagination):
@@ -113,34 +115,33 @@ def _is_internal_site_referrer(request, domain: str) -> bool:
     return ref_path == expected_exact or ref_path.startswith(expected_prefix)
 
 
-def serve_site_file(request, domain, file_path='index.html'):
-    """
-    Sirve archivos estáticos del sitio desplegado en /media/sites/<domain>/.
-    Solo expone deployments activos y protege contra path traversal.
-    """
+def _get_active_deployment_for_domain(domain: str) -> Deployment:
     deployment = Deployment.objects.filter(
         domain=domain,
-        status=Deployment.Status.ACTIVE,
+        status=Deployment.StatusChoices.ACTIVE,
         deleted_at__isnull=True,
     ).first()
 
     if not deployment:
         raise Http404('Sitio no encontrado o inactivo.')
 
+    return deployment
+
+
+def _get_site_root(domain: str) -> Path:
     site_root = Path(settings.MEDIA_ROOT) / 'sites' / domain
     if not site_root.exists() or not site_root.is_dir():
         raise Http404('El sitio no tiene archivos publicados.')
+    return site_root
 
-    # Algunos ZIP vienen con una carpeta contenedora única.
-    # Ejemplo típico: /sites/<domain>/<nombre-del-proyecto>/...
-    # La colapsamos para que la URL no dependa del nombre de carpeta.
-    effective_root = collapse_site_container_dir(site_root)
 
-    # Algunos ZIP traen el index dentro de una subcarpeta (p.ej. html/ o dist/).
-    # En ese caso, /sites/<domain>/ debe redirigir al entrypoint correcto.
-    entry_subdir = detect_site_entry_subdir(site_root)
+def _get_effective_site_root(site_root: Path) -> Path:
+    """Colapsa carpetas contenedoras típicas de ZIP para obtener la raíz efectiva del sitio."""
+    return collapse_site_container_dir(site_root)
 
-    safe_relative = file_path or 'index.html'
+
+def _resolve_site_file_path(*, effective_root: Path, file_path: str | None, entry_subdir: str | None = None) -> Path:
+    safe_relative = file_path or DEFAULT_INDEX_FILE
     target_path = (effective_root / safe_relative).resolve()
 
     try:
@@ -149,49 +150,95 @@ def serve_site_file(request, domain, file_path='index.html'):
         raise Http404('Ruta inválida.') from exc
 
     if target_path.is_dir():
-        target_path = target_path / 'index.html'
+        target_path = target_path / DEFAULT_INDEX_FILE
 
-    if not target_path.exists() or not target_path.is_file():
-        if entry_subdir and safe_relative in {'index.html', 'index.htm'}:
-            return HttpResponseRedirect(f'/sites/{domain}/{entry_subdir}/')
+    if target_path.exists() and target_path.is_file():
+        return target_path
 
-        # Fallback útil para rutas de SPA; no afecta sitios estáticos simples.
-        spa_index = effective_root / 'index.html'
-        if spa_index.exists() and spa_index.is_file():
-            target_path = spa_index
-        else:
-            # Soportar SPA dentro de subcarpeta (p.ej. /html/ o /dist/)
-            if entry_subdir:
-                entry_prefix = f'{entry_subdir}/'
-                if safe_relative == entry_subdir or safe_relative.startswith(entry_prefix):
-                    spa_index = effective_root / entry_subdir / 'index.html'
-                    if spa_index.exists() and spa_index.is_file():
-                        target_path = spa_index
-                    else:
-                        raise Http404('Archivo no encontrado.')
-                else:
-                    raise Http404('Archivo no encontrado.')
-            else:
-                raise Http404('Archivo no encontrado.')
+    # Fallback útil para rutas de SPA; no afecta sitios estáticos simples.
+    spa_index = effective_root / DEFAULT_INDEX_FILE
+    if spa_index.exists() and spa_index.is_file():
+        return spa_index
 
-    content_type, _ = mimetypes.guess_type(str(target_path))
+    # Soportar SPA dentro de subcarpeta (p.ej. /html/ o /dist/)
+    if entry_subdir:
+        entry_prefix = f'{entry_subdir}/'
+        if safe_relative == entry_subdir or safe_relative.startswith(entry_prefix):
+            spa_index = effective_root / entry_subdir / DEFAULT_INDEX_FILE
+            if spa_index.exists() and spa_index.is_file():
+                return spa_index
+
+    raise Http404('Archivo no encontrado.')
+
+
+def _track_site_visit_if_needed(*, request, domain: str, deployment: Deployment, target_path: Path) -> None:
     # Regla de negocio de visitas:
     # - Solo cuenta páginas HTML del sitio publicado (/sites/<domain>/...).
     # - No cuenta navegación interna por el propio sitio (header/menu interno).
     # - No cuenta navegación interna del panel admin ni scroll/interacciones del frontend.
-    if target_path.suffix.lower() in {'.html', '.htm'}:
-        # Siempre registrar la vista de página para el historial.
-        # Nota: en sitios SPA, la navegación interna (sin recargar) no genera solicitudes
-        # al backend, por lo que solo se registran cargas reales de ruta.
-        log_request(request, 'SITE_PAGE_VIEW', 200, user_id=deployment.user_id)
+    if target_path.suffix.lower() not in {'.html', '.htm'}:
+        return
 
-        # Contador de tráfico: solo cuenta entradas al sitio, no navegación interna.
-        if not _is_internal_site_referrer(request, domain):
-            deployment.traffic_visit_count = (deployment.traffic_visit_count or 0) + 1
-            deployment.save(update_fields=['traffic_visit_count', 'updated_at'])
-            log_request(request, 'SITE_VISIT', 200, user_id=deployment.user_id)
+    # Siempre registrar la vista de página para el historial.
+    # Nota: en sitios SPA, la navegación interna (sin recargar) no genera solicitudes
+    # al backend, por lo que solo se registran cargas reales de ruta.
+    log_request(request, 'SITE_PAGE_VIEW', 200, user_id=deployment.user_id)
+
+    # Contador de tráfico: solo cuenta entradas al sitio, no navegación interna.
+    if _is_internal_site_referrer(request, domain):
+        return
+
+    deployment.traffic_visit_count = (deployment.traffic_visit_count or 0) + 1
+    deployment.save(update_fields=['traffic_visit_count', 'updated_at'])
+    log_request(request, 'SITE_VISIT', 200, user_id=deployment.user_id)
+
+
+def serve_site_file(request, domain, file_path=DEFAULT_INDEX_FILE):
+    """Sirve archivos estáticos del sitio desplegado en /media/sites/<domain>/.
+
+    Solo expone deployments activos y protege contra path traversal.
+    """
+    deployment = _get_active_deployment_for_domain(domain)
+    site_root = _get_site_root(domain)
+    effective_root = _get_effective_site_root(site_root)
+    entry_subdir = detect_site_entry_subdir(site_root)
+
+    # Si el index está dentro de un subdirectorio, redirigir al entrypoint correcto.
+    safe_relative = file_path or DEFAULT_INDEX_FILE
+    if entry_subdir and safe_relative in {DEFAULT_INDEX_FILE, 'index.htm'}:
+        resolved = (effective_root / safe_relative).resolve()
+        if not resolved.exists():
+            return HttpResponseRedirect(f'/sites/{domain}/{entry_subdir}/')
+
+    target_path = _resolve_site_file_path(effective_root=effective_root, file_path=file_path, entry_subdir=entry_subdir)
+    content_type, _ = mimetypes.guess_type(str(target_path))
+
+    _track_site_visit_if_needed(
+        request=request,
+        domain=domain,
+        deployment=deployment,
+        target_path=target_path,
+    )
 
     return FileResponse(target_path.open('rb'), content_type=content_type or 'application/octet-stream')
+
+
+def _deployment_create_error_message(errors) -> str:
+    """Prioriza mensajes útiles sin exponer estructura interna."""
+    error_message = 'Datos inválidos. Revisa la información e inténtalo de nuevo.'
+
+    if isinstance(errors, dict) and errors:
+        domain_error = errors.get('domain')
+        if isinstance(domain_error, (list, tuple)) and domain_error:
+            return str(domain_error[0])
+        if domain_error:
+            return str(domain_error)
+        return error_message
+
+    if isinstance(errors, (list, tuple)) and errors:
+        return str(errors[0])
+
+    return error_message
 
 # ---------------------------------------------------------------------------
 # Listar y crear deployments del usuario autenticado
@@ -208,7 +255,7 @@ class DeploymentListView(APIView):
 
         status_filter = request.query_params.get('status')
         if status_filter:
-            valid_statuses = [s.value for s in Deployment.Status]
+            valid_statuses = [s.value for s in Deployment.StatusChoices]
             if status_filter not in valid_statuses:
                 return error_response(
                     message='Filtro de estado inválido.',
@@ -264,18 +311,7 @@ class DeploymentListView(APIView):
                 serializer.errors,
             )
 
-            error_message = 'Datos inválidos. Revisa la información e inténtalo de nuevo.'
-            errors = serializer.errors
-
-            if isinstance(errors, dict) and errors:
-                # Si el error es por el dominio (dato del usuario), podemos mostrarlo sin exponer estructura interna.
-                domain_error = errors.get('domain')
-                if isinstance(domain_error, (list, tuple)) and domain_error:
-                    error_message = str(domain_error[0])
-                elif domain_error:
-                    error_message = str(domain_error)
-            elif isinstance(errors, (list, tuple)) and errors:
-                error_message = str(errors[0])
+            error_message = _deployment_create_error_message(serializer.errors)
 
             log_request(request, 'USER_CREATE_DEPLOYMENT_FAILED', 400)
             return error_response(
@@ -307,7 +343,7 @@ class DeploymentListView(APIView):
                 status=500,
             )
 
-        if deployment.status == Deployment.Status.FAILED:
+        if deployment.status == Deployment.StatusChoices.FAILED:
             log_request(request, 'USER_CREATE_DEPLOYMENT_FAILED', 500)
             return error_response(
                 message='El despliegue falló al procesar el ZIP. Se registró el intento en el historial.',
@@ -403,8 +439,8 @@ class DeploymentDetailView(APIView):
             return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
 
         # Regla de negocio: no existe “eliminar”; solo inactivar.
-        if deployment.status != Deployment.Status.INACTIVE:
-            deployment.status = Deployment.Status.INACTIVE
+        if deployment.status != Deployment.StatusChoices.INACTIVE:
+            deployment.status = Deployment.StatusChoices.INACTIVE
             deployment.save(update_fields=['status', 'updated_at'])
 
         log_request(request, 'USER_INACTIVATE_DEPLOYMENT', 200)
@@ -636,7 +672,7 @@ class UploadVersionView(APIView):
                 status=500,
             )
 
-        if deployment.status == Deployment.Status.FAILED:
+        if deployment.status == Deployment.StatusChoices.FAILED:
             log_request(request, 'UPLOAD_VERSION_FAILED', 500)
             return error_response(
                 message='La versión falló al procesar el ZIP. Se registró el intento en el historial.',
@@ -726,10 +762,10 @@ class VersionDetailView(APIView):
                 deleted_at__isnull=True,
             )
         except Deployment.DoesNotExist:
-            return error_response(message='Versión no encontrada.', status=404)
+            return error_response(message=VERSION_NOT_FOUND, status=404)
 
         if not version.zip_path:
-            return error_response(message='Versión no encontrada.', status=404)
+            return error_response(message=VERSION_NOT_FOUND, status=404)
 
         log_request(request, 'GET_VERSION', 200)
         return success_response(
@@ -761,18 +797,18 @@ class RollbackVersionView(APIView):
                 deleted_at__isnull=True,
             )
         except Deployment.DoesNotExist:
-            return error_response(message='Versión no encontrada.', status=404)
+            return error_response(message=VERSION_NOT_FOUND, status=404)
 
         if not target_version.zip_path:
-            return error_response(message='Versión no encontrada.', status=404)
+            return error_response(message=VERSION_NOT_FOUND, status=404)
 
-        if target_version.status == Deployment.Status.ACTIVE:
+        if target_version.status == Deployment.StatusChoices.ACTIVE:
             return error_response(
                 message='Esta versión ya está activa.',
                 status=400,
             )
 
-        if target_version.status not in (Deployment.Status.REPLACED, Deployment.Status.INACTIVE):
+        if target_version.status not in (Deployment.StatusChoices.REPLACED, Deployment.StatusChoices.INACTIVE):
             return error_response(
                 message='Esta versión no se puede restaurar.',
                 status=400,
@@ -793,8 +829,8 @@ class RollbackVersionView(APIView):
         Deployment.objects.filter(
             user=request.user,
             deleted_at__isnull=True,
-            status=Deployment.Status.ACTIVE,
-        ).update(status=Deployment.Status.REPLACED)
+            status=Deployment.StatusChoices.ACTIVE,
+        ).update(status=Deployment.StatusChoices.REPLACED)
 
         try:
             extract_zip_to_site(zip_abs_path, target_version.domain, media_root)
@@ -812,7 +848,7 @@ class RollbackVersionView(APIView):
             )
 
         # Conserva traffic_visit_count y vuelve a incrementarse desde aquí.
-        target_version.status = Deployment.Status.ACTIVE
+        target_version.status = Deployment.StatusChoices.ACTIVE
         target_version.save(update_fields=['status', 'updated_at'])
 
         log_request(request, 'ROLLBACK_VERSION', 200)
@@ -843,7 +879,7 @@ class AdminDeploymentListView(APIView):
         user_filter   = request.query_params.get('user_id')
 
         if status_filter:
-            valid_statuses = [s.value for s in Deployment.Status]
+            valid_statuses = [s.value for s in Deployment.StatusChoices]
             if status_filter not in valid_statuses:
                 return error_response(
                     message='Filtro de estado inválido.',
@@ -889,19 +925,19 @@ class AdminDeploymentStatusView(APIView):
         next_status = (request.data.get('status') or '').strip().lower()
 
         # Regla de negocio admin (UX): el botón stop bloquea SOLO si está activo.
-        if next_status != Deployment.Status.BLOCKED:
+        if next_status != Deployment.StatusChoices.BLOCKED:
             return error_response(
                 message='Acción no válida.',
                 status=400,
             )
 
-        if deployment.status != Deployment.Status.ACTIVE:
+        if deployment.status != Deployment.StatusChoices.ACTIVE:
             return error_response(
                 message='Solo puedes bloquear un despliegue cuando está activo.',
                 status=400,
             )
 
-        deployment.status = Deployment.Status.BLOCKED
+        deployment.status = Deployment.StatusChoices.BLOCKED
         deployment.save(update_fields=['status', 'updated_at'])
 
         log_request(request, 'ADMIN_BLOCK_DEPLOYMENT', 200, user_id=request.user.pk)

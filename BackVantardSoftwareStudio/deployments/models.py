@@ -12,7 +12,7 @@ class DeploymentStatus(models.TextChoices):
 
 class Deployment(models.Model):
 
-    Status = DeploymentStatus
+    StatusChoices = DeploymentStatus
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -66,8 +66,8 @@ class Deployment(models.Model):
 
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.ACTIVE,
+        choices=StatusChoices.choices,
+        default=StatusChoices.ACTIVE,
         db_column='status'
     )
 

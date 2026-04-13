@@ -18,11 +18,13 @@ const AdminUserService = {
       const response = await axiosClient.get(ENDPOINTS.users.list);
 
       const payload = response?.data?.data ?? response?.data ?? {};
-      const rawUsers = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.users)
-          ? payload.users
-          : [];
+
+      let rawUsers = [];
+      if (Array.isArray(payload)) {
+        rawUsers = payload;
+      } else if (Array.isArray(payload?.users)) {
+        rawUsers = payload.users;
+      }
 
       const usuarios = rawUsers.map((item) => {
         const roleName = (item.role_name || "").trim().toLowerCase();

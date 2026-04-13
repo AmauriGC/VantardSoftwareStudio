@@ -7,11 +7,13 @@ export default class AdminPlanService {
       // Para admin usamos el listado completo (todos los planes no eliminados)
       const response = await axiosClient.get(ENDPOINTS.plans.adminList);
       const payload = response?.data?.data ?? response?.data ?? {};
-      const rawPlans = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.plans)
-          ? payload.plans
-          : [];
+
+      let rawPlans = [];
+      if (Array.isArray(payload)) {
+        rawPlans = payload;
+      } else if (Array.isArray(payload?.plans)) {
+        rawPlans = payload.plans;
+      }
 
       return { ok: true, data: rawPlans };
     } catch (error) {

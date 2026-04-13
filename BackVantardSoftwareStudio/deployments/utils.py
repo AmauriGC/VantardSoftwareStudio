@@ -15,6 +15,8 @@ from .zip_utils import ZipValidationError, extract_zip_to_site, save_zip_file_fo
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_SITE_ZIP_NAME = 'sitio.zip'
+
 _COMMON_SITE_ENTRY_DIRS: tuple[str, ...] = (
     'dist',
     'build',
@@ -35,7 +37,6 @@ def collapse_site_container_dir(root: Path) -> Path:
 
     Solo colapsa cuando el directorio actual contiene *únicamente* una carpeta (sin archivos).
     """
-
     current = root
     for _ in range(5):
         if not current.exists() or not current.is_dir():
@@ -66,7 +67,6 @@ def detect_site_entry_subdir(site_root: Path) -> str | None:
     index.html en la raíz efectiva, pero sí dentro de un subdirectorio común.
     Si el sitio puede abrirse en /sites/<domain>/, retorna None.
     """
-
     effective_root = collapse_site_container_dir(site_root)
 
     root_index = effective_root / 'index.html'
@@ -80,13 +80,13 @@ def detect_site_entry_subdir(site_root: Path) -> str | None:
 
     return None
 
+
 def generate_site_url(domain: str, base_url: str, entry_subdir: str | None = None) -> str:
     """Genera la URL pública del sitio a partir del dominio.
 
     Algunos ZIP subidos traen el index dentro de una subcarpeta (p.ej. html/ o dist/).
     En esos casos, la URL de entrada debe incluir el subdirectorio.
     """
-
     base = base_url.rstrip('/')
     if entry_subdir:
         safe_entry = str(entry_subdir).strip('/')
@@ -156,7 +156,7 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
             zip_file,
             user_id=user.id,
             version_number=next_version,
-            original_filename=getattr(zip_file, 'name', 'sitio.zip'),
+            original_filename=getattr(zip_file, 'name', DEFAULT_SITE_ZIP_NAME),
             media_root=media_root,
         )
 
@@ -170,9 +170,9 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
                 user=user,
                 domain=domain,
                 site_url=generate_site_url(domain, settings.DEPLOYMENT_BASE_URL),
-                status=Deployment.Status.FAILED,
+                status=Deployment.StatusChoices.FAILED,
                 version_number=next_version,
-                zip_filename=Path(getattr(zip_file, 'name', 'sitio.zip')).name,
+                zip_filename=Path(getattr(zip_file, 'name', DEFAULT_SITE_ZIP_NAME)).name,
                 zip_path=zip_rel_path,
                 disk_used_mb=new_disk_used_mb_int,
                 traffic_visit_count=0,
@@ -183,17 +183,17 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
 
         # Éxito: recién aquí reemplazamos SOLO el/los activos previos del usuario
         (
-            Deployment.objects.filter(user=user, status=Deployment.Status.ACTIVE, deleted_at__isnull=True)
-            .update(status=Deployment.Status.REPLACED)
+            Deployment.objects.filter(user=user, status=Deployment.StatusChoices.ACTIVE, deleted_at__isnull=True)
+            .update(status=Deployment.StatusChoices.REPLACED)
         )
 
         deployment = Deployment.objects.create(
             user=user,
             domain=domain,
             site_url=generate_site_url(domain, settings.DEPLOYMENT_BASE_URL, entry_subdir),
-            status=Deployment.Status.ACTIVE,
+            status=Deployment.StatusChoices.ACTIVE,
             version_number=next_version,
-            zip_filename=Path(getattr(zip_file, 'name', 'sitio.zip')).name,
+            zip_filename=Path(getattr(zip_file, 'name', DEFAULT_SITE_ZIP_NAME)).name,
             zip_path=zip_rel_path,
             disk_used_mb=new_disk_used_mb_int,
             traffic_visit_count=0,

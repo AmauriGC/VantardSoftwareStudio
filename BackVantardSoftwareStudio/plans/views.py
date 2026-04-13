@@ -20,7 +20,7 @@ class PlanListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        plans = Plan.objects.filter(status=Plan.Status.ACTIVE, deleted_at__isnull=True)
+        plans = Plan.objects.filter(status=Plan.StatusChoices.ACTIVE, deleted_at__isnull=True)
         serializer = PlanOutputSerializer(plans, many=True)
         log_request(request, 'PLAN_LIST', 200)
         return success_response(
@@ -51,7 +51,7 @@ class PlanListView(APIView):
             name=data['name'],
             price=data['price'],
             max_disk_mb=data['max_disk_mb'],
-            status=data.get('status', Plan.Status.ACTIVE),
+            status=data.get('status', Plan.StatusChoices.ACTIVE),
         )
 
         log_request(request, 'PLAN_CREATE', 201)

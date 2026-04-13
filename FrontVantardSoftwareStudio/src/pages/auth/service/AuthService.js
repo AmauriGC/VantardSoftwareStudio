@@ -176,7 +176,7 @@ export default class AuthService {
     }
 
     try {
-      const ciphertext = encryptPayload({
+      const ciphertext = await encryptPayload({
         uid:              normalizedUid,
         token:            normalizedToken,
         new_password:     normalizedNewPassword,
@@ -187,7 +187,7 @@ export default class AuthService {
         ciphertext,
       });
 
-      const decrypted = decryptPayload(response?.data?.ciphertext);
+      const decrypted = await decryptPayload(response?.data?.ciphertext);
       return {
         ok: true,
         message: decrypted?.message ?? "Contraseña restablecida correctamente.",

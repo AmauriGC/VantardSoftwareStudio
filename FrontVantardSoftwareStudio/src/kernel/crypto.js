@@ -1,28 +1,96 @@
-import CryptoJS from 'crypto-js';
+const NONCE_SIZE = 12;
 
-const KEY = CryptoJS.enc.Utf8.parse(import.meta.env.VITE_AES_KEY);
+let cachedKeyPromise = null;
 
-export function encryptPayload(data) {
-  const plaintext = JSON.stringify(data);
-  const iv = CryptoJS.lib.WordArray.random(16);
-  const encrypted = CryptoJS.AES.encrypt(plaintext, KEY, {
-    iv,
-    mode:    CryptoJS.mode.CBC,
-    padding: CryptoJS.pad.Pkcs7,
-  });
-  // Prefijar IV al ciphertext y codificar todo en base64
-  const combined = iv.concat(encrypted.ciphertext);
-  return CryptoJS.enc.Base64.stringify(combined);
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCodePoint(...bytes.subarray(i, i + chunkSize));
+  }
+
+  return globalThis.btoa(binary);
 }
 
-export function decryptPayload(ciphertextB64) {
-  const combined = CryptoJS.enc.Base64.parse(ciphertextB64);
-  const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 4), 16);
-  const ciphertext = CryptoJS.lib.WordArray.create(combined.words.slice(4), combined.sigBytes - 16);
-  const decrypted = CryptoJS.AES.decrypt({ ciphertext }, KEY, {
-    iv,
-    mode:    CryptoJS.mode.CBC,
-    padding: CryptoJS.pad.Pkcs7,
-  });
-  return JSON.parse(decrypted.toString(CryptoJS.enc.Utf8));
+function base64ToBytes(b64) {
+  const binary = globalThis.atob(b64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    const codePoint = binary.codePointAt(i);
+    bytes[i] = codePoint ?? 0;
+  }
+
+  return bytes;
+}
+
+function concatBytes(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+async function getAesGcmKey() {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("WebCrypto no está disponible en este entorno.");
+  }
+
+  const rawKeyStr = import.meta.env.VITE_AES_KEY;
+  if (!rawKeyStr) {
+    throw new Error("Falta configurar VITE_AES_KEY.");
+  }
+
+  if (!cachedKeyPromise) {
+    const rawKeyBytes = new TextEncoder().encode(rawKeyStr);
+    cachedKeyPromise = globalThis.crypto.subtle.importKey(
+      "raw",
+      rawKeyBytes,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  }
+
+  return cachedKeyPromise;
+}
+
+export async function encryptPayload(data) {
+  const key = await getAesGcmKey();
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(NONCE_SIZE));
+  const plaintext = new TextEncoder().encode(JSON.stringify(data));
+
+  const encrypted = await globalThis.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    plaintext,
+  );
+
+  const combined = concatBytes(iv, new Uint8Array(encrypted));
+  return bytesToBase64(combined);
+}
+
+export async function decryptPayload(ciphertextB64) {
+  if (!ciphertextB64) {
+    throw new Error("Ciphertext vacío.");
+  }
+
+  const key = await getAesGcmKey();
+  const combined = base64ToBytes(ciphertextB64);
+  if (combined.length < NONCE_SIZE + 16) {
+    throw new Error("Ciphertext inválido o incompleto.");
+  }
+
+  const iv = combined.slice(0, NONCE_SIZE);
+  const data = combined.slice(NONCE_SIZE);
+
+  const decrypted = await globalThis.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    data,
+  );
+
+  const plaintext = new TextDecoder().decode(decrypted);
+  return JSON.parse(plaintext);
 }

@@ -13,7 +13,7 @@ class PlanChangeRequestStatus(models.TextChoices):
 
 class PlanChangeRequest(models.Model):
 
-    Status = PlanChangeRequestStatus
+    StatusChoices = PlanChangeRequestStatus
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -65,8 +65,8 @@ class PlanChangeRequest(models.Model):
 
     status = models.CharField(
         max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING,
+        choices=StatusChoices.choices,
+        default=StatusChoices.PENDING,
         db_column='status',
     )
 
@@ -145,27 +145,27 @@ class PlanChangeRequest(models.Model):
 
     @property
     def is_pending(self) -> bool:
-        return self.status == self.Status.PENDING and not self.is_deleted
+        return self.status == self.StatusChoices.PENDING and not self.is_deleted
 
     @property
     def is_approved(self) -> bool:
-        return self.status == self.Status.APPROVED
+        return self.status == self.StatusChoices.APPROVED
 
     @property
     def is_completed(self) -> bool:
-        return self.status == self.Status.COMPLETED
+        return self.status == self.StatusChoices.COMPLETED
 
     def soft_delete(self):
         """Soft delete de la solicitud."""
         from django.utils import timezone
         self.deleted_at = timezone.now()
-        self.status = self.Status.CANCELLED
+        self.status = self.StatusChoices.CANCELLED
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])
 
     def approve(self, reviewed_by_user):
         """Aprobar la solicitud de cambio."""
         from django.utils import timezone
-        self.status = self.Status.APPROVED
+        self.status = self.StatusChoices.APPROVED
         self.reviewed_by = reviewed_by_user
         self.reviewed_at = timezone.now()
         self.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'updated_at'])
@@ -173,7 +173,7 @@ class PlanChangeRequest(models.Model):
     def reject(self, reviewed_by_user):
         """Rechazar la solicitud de cambio."""
         from django.utils import timezone
-        self.status = self.Status.REJECTED
+        self.status = self.StatusChoices.REJECTED
         self.reviewed_by = reviewed_by_user
         self.reviewed_at = timezone.now()
         self.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'updated_at'])
@@ -181,6 +181,6 @@ class PlanChangeRequest(models.Model):
     def complete(self):
         """Marcar como completada (cambio aplicado)."""
         from django.utils import timezone
-        self.status = self.Status.COMPLETED
+        self.status = self.StatusChoices.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'completed_at', 'updated_at'])
