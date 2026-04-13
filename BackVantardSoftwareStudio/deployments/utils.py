@@ -14,9 +14,84 @@ from .zip_utils import ZipValidationError, extract_zip_to_site, save_zip_file_fo
 
 logger = logging.getLogger(__name__)
 
-def generate_site_url(domain: str, base_url: str) -> str:
-    """Genera la URL pública del sitio a partir del dominio."""
-    return f"{base_url.rstrip('/')}/sites/{domain}/"
+
+_COMMON_SITE_ENTRY_DIRS: tuple[str, ...] = (
+    'dist',
+    'build',
+    'public',
+    'html',
+)
+
+_IGNORED_CONTAINER_NAMES: set[str] = {
+    '__MACOSX',
+}
+
+
+def collapse_site_container_dir(root: Path) -> Path:
+    """Colapsa carpetas contenedoras típicas de ZIP.
+
+    Ejemplo: muchos ZIP vienen como /sites/<domain>/<carpeta-del-proyecto>/...
+    y queremos tratar esa carpeta como raíz efectiva del sitio.
+
+    Solo colapsa cuando el directorio actual contiene *únicamente* una carpeta (sin archivos).
+    """
+
+    current = root
+    for _ in range(5):
+        if not current.exists() or not current.is_dir():
+            break
+
+        try:
+            children = [p for p in current.iterdir() if p.name not in _IGNORED_CONTAINER_NAMES]
+        except OSError:
+            break
+
+        if len(children) != 1:
+            break
+
+        only_child = children[0]
+        if only_child.is_dir():
+            current = only_child
+            continue
+
+        break
+
+    return current
+
+
+def detect_site_entry_subdir(site_root: Path) -> str | None:
+    """Detecta si el sitio requiere un subdirectorio en la URL para abrirse.
+
+    Retorna el nombre del subdirectorio (p. ej. 'html' o 'dist') cuando no hay
+    index.html en la raíz efectiva, pero sí dentro de un subdirectorio común.
+    Si el sitio puede abrirse en /sites/<domain>/, retorna None.
+    """
+
+    effective_root = collapse_site_container_dir(site_root)
+
+    root_index = effective_root / 'index.html'
+    if root_index.exists() and root_index.is_file():
+        return None
+
+    for candidate in _COMMON_SITE_ENTRY_DIRS:
+        candidate_index = effective_root / candidate / 'index.html'
+        if candidate_index.exists() and candidate_index.is_file():
+            return candidate
+
+    return None
+
+def generate_site_url(domain: str, base_url: str, entry_subdir: str | None = None) -> str:
+    """Genera la URL pública del sitio a partir del dominio.
+
+    Algunos ZIP subidos traen el index dentro de una subcarpeta (p.ej. html/ o dist/).
+    En esos casos, la URL de entrada debe incluir el subdirectorio.
+    """
+
+    base = base_url.rstrip('/')
+    if entry_subdir:
+        safe_entry = str(entry_subdir).strip('/')
+        return f"{base}/sites/{domain}/{safe_entry}/"
+    return f"{base}/sites/{domain}/"
 
 def is_valid_domain(value: str) -> bool:
     """
@@ -104,6 +179,8 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
             )
             return failed_deployment
 
+        entry_subdir = detect_site_entry_subdir(media_root / 'sites' / domain)
+
         # Éxito: recién aquí reemplazamos SOLO el/los activos previos del usuario
         (
             Deployment.objects.filter(user=user, status=Deployment.Status.ACTIVE, deleted_at__isnull=True)
@@ -113,7 +190,7 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
         deployment = Deployment.objects.create(
             user=user,
             domain=domain,
-            site_url=generate_site_url(domain, settings.DEPLOYMENT_BASE_URL),
+            site_url=generate_site_url(domain, settings.DEPLOYMENT_BASE_URL, entry_subdir),
             status=Deployment.Status.ACTIVE,
             version_number=next_version,
             zip_filename=Path(getattr(zip_file, 'name', 'sitio.zip')).name,

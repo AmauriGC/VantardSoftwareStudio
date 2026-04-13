@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -25,7 +25,7 @@ from .serializers import (
     DeploymentOutputSerializer,
     DeploymentUpdateSerializer,
 )
-from .utils import deploy_zip_as_new_deployment
+from .utils import collapse_site_container_dir, deploy_zip_as_new_deployment, detect_site_entry_subdir
 from .zip_utils import ZipValidationError, extract_zip_to_site
 
 
@@ -132,13 +132,13 @@ def serve_site_file(request, domain, file_path='index.html'):
         raise Http404('El sitio no tiene archivos publicados.')
 
     # Algunos ZIP vienen con una carpeta contenedora única.
-    # Si no hay index en raíz, usar esa carpeta como raíz efectiva del sitio.
-    effective_root = site_root
-    root_index = site_root / 'index.html'
-    if not root_index.exists():
-        child_dirs = [p for p in site_root.iterdir() if p.is_dir()]
-        if len(child_dirs) == 1 and (child_dirs[0] / 'index.html').exists():
-            effective_root = child_dirs[0]
+    # Ejemplo típico: /sites/<domain>/<nombre-del-proyecto>/...
+    # La colapsamos para que la URL no dependa del nombre de carpeta.
+    effective_root = collapse_site_container_dir(site_root)
+
+    # Algunos ZIP traen el index dentro de una subcarpeta (p.ej. html/ o dist/).
+    # En ese caso, /sites/<domain>/ debe redirigir al entrypoint correcto.
+    entry_subdir = detect_site_entry_subdir(site_root)
 
     safe_relative = file_path or 'index.html'
     target_path = (effective_root / safe_relative).resolve()
@@ -152,12 +152,27 @@ def serve_site_file(request, domain, file_path='index.html'):
         target_path = target_path / 'index.html'
 
     if not target_path.exists() or not target_path.is_file():
+        if entry_subdir and safe_relative in {'index.html', 'index.htm'}:
+            return HttpResponseRedirect(f'/sites/{domain}/{entry_subdir}/')
+
         # Fallback útil para rutas de SPA; no afecta sitios estáticos simples.
         spa_index = effective_root / 'index.html'
         if spa_index.exists() and spa_index.is_file():
             target_path = spa_index
         else:
-            raise Http404('Archivo no encontrado.')
+            # Soportar SPA dentro de subcarpeta (p.ej. /html/ o /dist/)
+            if entry_subdir:
+                entry_prefix = f'{entry_subdir}/'
+                if safe_relative == entry_subdir or safe_relative.startswith(entry_prefix):
+                    spa_index = effective_root / entry_subdir / 'index.html'
+                    if spa_index.exists() and spa_index.is_file():
+                        target_path = spa_index
+                    else:
+                        raise Http404('Archivo no encontrado.')
+                else:
+                    raise Http404('Archivo no encontrado.')
+            else:
+                raise Http404('Archivo no encontrado.')
 
     content_type, _ = mimetypes.guess_type(str(target_path))
     # Regla de negocio de visitas:
