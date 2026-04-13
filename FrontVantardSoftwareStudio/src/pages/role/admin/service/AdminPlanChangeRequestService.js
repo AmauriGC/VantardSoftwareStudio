@@ -6,11 +6,13 @@ export default class AdminPlanChangeRequestService {
     try {
       const response = await axiosClient.get(ENDPOINTS.planChangeRequests.adminList);
       const payload = response?.data?.data ?? response?.data ?? {};
-      const rawRequests = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.solicitudes)
-          ? payload.solicitudes
-          : [];
+
+      let rawRequests = [];
+      if (Array.isArray(payload)) {
+        rawRequests = payload;
+      } else if (Array.isArray(payload?.solicitudes)) {
+        rawRequests = payload.solicitudes;
+      }
 
       return { ok: true, data: rawRequests };
     } catch (error) {

@@ -7,7 +7,7 @@ function bytesToBase64(bytes) {
   const chunkSize = 0x8000;
 
   for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    binary += String.fromCodePoint(...bytes.subarray(i, i + chunkSize));
   }
 
   return globalThis.btoa(binary);
@@ -18,7 +18,8 @@ function base64ToBytes(b64) {
   const bytes = new Uint8Array(binary.length);
 
   for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+    const codePoint = binary.codePointAt(i);
+    bytes[i] = codePoint ?? 0;
   }
 
   return bytes;

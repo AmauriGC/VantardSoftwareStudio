@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import PropTypes from "prop-types";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -38,19 +38,15 @@ export default function BaseTable({
   const totalCount = isServerPaginated ? totalRows : rows.length;
 
   const paginated = pageSize > 0;
-  const totalPages = useMemo(
-    () => (paginated ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1),
-    [paginated, totalCount, pageSize]
-  );
+  const totalPages = paginated ? Math.max(1, Math.ceil(totalCount / pageSize)) : 1;
 
   const clientPage = paginated ? Math.min(Math.max(page, 1), totalPages) : 1;
   const currentPage = isServerPaginated ? controlledPage : clientPage;
 
-  const visibleRows = isServerPaginated
-    ? rows
-    : paginated
-      ? rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-      : rows;
+  let visibleRows = rows;
+  if (!isServerPaginated && paginated) {
+    visibleRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }
 
   const alignClass = {
     left: "text-left",

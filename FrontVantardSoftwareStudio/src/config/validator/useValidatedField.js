@@ -60,7 +60,7 @@ export default function useValidatedField(initialValue, group, getContext) {
 
   const reset = useCallback(
     (nextValue) => {
-      const valueToSet = nextValue !== undefined ? nextValue : initialValue ?? "";
+      const valueToSet = nextValue === undefined ? (initialValue ?? "") : nextValue;
       setFieldValue(valueToSet);
       setTouched(false);
       setDirty(false);

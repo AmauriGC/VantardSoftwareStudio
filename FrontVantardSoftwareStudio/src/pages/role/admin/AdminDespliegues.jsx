@@ -138,10 +138,18 @@ export default function AdminDespliegues() {
       const updated = response?.data?.data ?? null;
 
       setDeployments((prev) =>
-        prev.map((item) => (item.id === despliegue.id ? { ...item, ...(updated || {}) } : item))
+        prev.map((item) => {
+          if (item.id !== despliegue.id) return item;
+          if (updated) return { ...item, ...updated };
+          return { ...item };
+        })
       );
       if (seleccionado?.id === despliegue.id) {
-        setSeleccionado((prev) => ({ ...(prev || {}), ...(updated || {}) }));
+        setSeleccionado((prev) => {
+          if (!prev) return prev;
+          if (updated) return { ...prev, ...updated };
+          return { ...prev };
+        });
       }
       showSuccessAlert({
         title: "Despliegue bloqueado",
