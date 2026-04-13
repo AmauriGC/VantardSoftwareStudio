@@ -25,7 +25,7 @@ export default function UserDashboard() {
   useEffect(() => {
     const cargarDatos = async () => {
       // Obtener perfil del usuario
-      const resultProfile = await UserService.getProfile();
+      const resultProfile = await UserService.getDashboardProfile();
       if (resultProfile.ok) {
         setProfile(resultProfile.data);
       } else {

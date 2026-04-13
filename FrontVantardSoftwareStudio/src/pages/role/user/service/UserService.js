@@ -12,6 +12,16 @@ export default class UserService {
     }
   }
 
+  static async getDashboardProfile() {
+    try {
+      const response = await axiosClient.get(ENDPOINTS.dashboard.user);
+      return { ok: true, data: response?.data?.data ?? null };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
   static async updateProfile({ first_name, last_name }) {
     try {
       const response = await axiosClient.put(ENDPOINTS.users.profile, {
