@@ -6,6 +6,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- TRIGGERS
 -- ========================
 
+DROP TRIGGER IF EXISTS `trg_validate_storage_limit`;
+
 DELIMITER $$
 
 CREATE TRIGGER `trg_validate_storage_limit`
@@ -30,6 +32,8 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+DROP TRIGGER IF EXISTS `trg_replace_previous_deployment`;
 
 DELIMITER $$
 
