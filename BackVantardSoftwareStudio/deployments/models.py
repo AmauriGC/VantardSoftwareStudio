@@ -1,14 +1,18 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
+
+
+class DeploymentStatus(models.TextChoices):
+    ACTIVE = 'active', 'Activo'
+    BLOCKED = 'blocked', 'Bloqueado'
+    INACTIVE = 'inactive', 'Inactivo'
+    REPLACED = 'replaced', 'Reemplazado'
+    FAILED = 'failed', 'Fallido'
 
 class Deployment(models.Model):
 
-    class Status(models.TextChoices):
-        ACTIVE   = 'active',   'Activo'
-        BLOCKED  = 'blocked',  'Bloqueado'
-        INACTIVE = 'inactive', 'Inactivo'
-        REPLACED = 'replaced', 'Reemplazado'
-        FAILED   = 'failed',   'Fallido'
+    Status = DeploymentStatus
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -76,9 +80,25 @@ class Deployment(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Despliegue'
         verbose_name_plural = 'Despliegues'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_deployments_status_valid',
+                condition=Q(
+                    status__in=[
+                        DeploymentStatus.ACTIVE,
+                        DeploymentStatus.BLOCKED,
+                        DeploymentStatus.INACTIVE,
+                        DeploymentStatus.REPLACED,
+                        DeploymentStatus.FAILED,
+                    ]
+                ),
+            ),
+            models.UniqueConstraint(
+                name='uq_deployments_user_version_number',
+                fields=['user', 'version_number'],
+            ),
+        ]
         indexes = [
-            models.Index(fields=['user'], name='idx_deployments_user_id'),
-            models.Index(fields=['status'], name='idx_deployments_status'),
             models.Index(fields=['created_at'], name='idx_deployments_created_at'),
             models.Index(fields=['deleted_at'], name='idx_deployments_deleted_at'),
         ]

@@ -3,6 +3,8 @@ from .models import SystemLog
 
 class SystemLogOutputSerializer(serializers.ModelSerializer):
 
+    user_id = serializers.IntegerField(read_only=True)
+
     class Meta:
         model  = SystemLog
         fields = [

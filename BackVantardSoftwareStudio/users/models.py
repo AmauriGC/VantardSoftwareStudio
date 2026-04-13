@@ -1,12 +1,16 @@
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from .managers import UserManager
 
+
+class UserStatus(models.TextChoices):
+    ACTIVE = 'active', 'Active'
+    BLOCKED = 'blocked', 'Blocked'
+
 class User(AbstractBaseUser, PermissionsMixin):
 
-    class Status(models.TextChoices):
-        ACTIVE  = 'active',  'Active'
-        BLOCKED = 'blocked', 'Blocked'
+    Status = UserStatus
 
     first_name = models.CharField(
         max_length=100,
@@ -34,8 +38,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         on_delete=models.PROTECT,
         db_column='role_id',
         related_name='users',
-        null=True,  # Temporal para la migración
-        blank=True,
+        null=False,
+        blank=False,
         help_text='Rol del usuario.'
     )
 
@@ -63,12 +67,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         ordering        = ['-created_at']
         verbose_name    = 'User'
         verbose_name_plural = 'Users'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_users_status_valid',
+                    condition=Q(status__in=['active', 'blocked']),
+            ),
+        ]
         indexes = [
-            models.Index(fields=['email'],      name='idx_users_email'),
-            models.Index(fields=['status'],     name='idx_users_status'),
-            models.Index(fields=['created_at'], name='idx_users_created_at'),
             models.Index(fields=['deleted_at'], name='idx_users_deleted_at'),
-            models.Index(fields=['role'], name='idx_users_role_id'),
         ]
 
     def __str__(self):
