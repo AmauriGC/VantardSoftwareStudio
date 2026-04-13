@@ -72,6 +72,7 @@ export default function AdminPlanes() {
           }, {})
         );
       } catch (error) {
+        console.error(error);
         showErrorAlert({
           title: "Error al cargar planes",
           text: "No se pudieron cargar los planes desde el servidor.",
@@ -124,6 +125,7 @@ export default function AdminPlanes() {
 
       setSolicitudes(mapped);
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error al cargar solicitudes",
         text: "No se pudieron cargar las solicitudes de cambio de plan.",
@@ -235,6 +237,7 @@ export default function AdminPlanes() {
         );
       }
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error",
         text: "Ocurrió un error al actualizar los planes.",
@@ -285,6 +288,7 @@ export default function AdminPlanes() {
 
       await cargarSolicitudes();
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error al aprobar",
         text: "Ocurrió un error al aprobar la solicitud.",
@@ -315,6 +319,7 @@ export default function AdminPlanes() {
 
       await cargarSolicitudes();
     } catch (error) {
+      console.error(error);
       showErrorAlert({
         title: "Error al rechazar",
         text: "Ocurrió un error al rechazar la solicitud.",
@@ -323,6 +328,140 @@ export default function AdminPlanes() {
       setIsUpdatingSolicitud(false);
     }
   };
+
+  let planesTableBody;
+  if (isLoadingPlanes) {
+    planesTableBody = (
+      <tr>
+        <td colSpan={4} className="py-8 text-center text-sm text-gray-400">
+          Cargando planes...
+        </td>
+      </tr>
+    );
+  } else if (planes.length === 0) {
+    planesTableBody = (
+      <tr>
+        <td colSpan={4} className="py-8 text-center text-sm text-gray-400">
+          No hay planes registrados.
+        </td>
+      </tr>
+    );
+  } else {
+    planesTableBody = planes.map((p) => {
+      const borrador = borradores[p.id] || {
+        precio: String(p.precio ?? 0),
+        discoMaxMB: String(p.discoMaxMB ?? 0),
+        habilitado: p.habilitado ?? true,
+      };
+
+      return (
+        <tr
+          key={p.id}
+          className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+        >
+          <td className="py-3 px-5 font-medium text-gray-900">{p.nombre || p.name}</td>
+          <td className="py-3 px-5">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={borrador.habilitado}
+                onChange={(e) => updateBorrador(p.id, "habilitado", e.target.checked)}
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+              <span className="ml-2 text-xs text-gray-600">
+                {borrador.habilitado ? "Activo" : "Inactivo"}
+              </span>
+            </label>
+          </td>
+          <td className="py-3 px-5">
+            <input
+              type="number"
+              min="0"
+              value={borrador.precio}
+              onChange={(e) => updateBorrador(p.id, "precio", e.target.value)}
+              className="h-8 w-28 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
+            />
+          </td>
+          <td className="py-3 px-5">
+            <input
+              type="number"
+              min="0"
+              value={borrador.discoMaxMB}
+              onChange={(e) => updateBorrador(p.id, "discoMaxMB", e.target.value)}
+              className="h-8 w-28 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
+            />
+          </td>
+        </tr>
+      );
+    });
+  }
+
+  let solicitudesTableBody;
+  if (isLoadingSolicitudes) {
+    solicitudesTableBody = (
+      <tr>
+        <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+          Cargando solicitudes...
+        </td>
+      </tr>
+    );
+  } else if (solicitudes.length === 0) {
+    solicitudesTableBody = (
+      <tr>
+        <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+          No hay solicitudes registradas.
+        </td>
+      </tr>
+    );
+  } else {
+    solicitudesTableBody = solicitudes.map((s) => {
+      const puedeActuar = s.estado === "Pendiente";
+      return (
+        <tr
+          key={s.id}
+          className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
+        >
+          <td className="py-3 px-4 font-medium text-gray-900">{s.planSolicitado}</td>
+          <td className="py-3 px-4 text-gray-500">{s.usuario || getNombreUsuario(s.usuarioId)}</td>
+          <td className="py-3 px-4 text-gray-500">{s.tipo}</td>
+          <td className="py-3 px-4 text-right text-gray-500">{s.meses}</td>
+          <td className="py-3 px-4 text-right font-medium text-gray-900">
+            {s.total === "-" ? "-" : `$${s.total}`}
+          </td>
+          <td className="py-3 px-4">
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                ESTADO_SOLICITUD_CLASES[s.estado] || "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {s.estado}
+            </span>
+          </td>
+          <td className="py-3 px-4 text-gray-500">{s.creadoEn}</td>
+          <td className="py-3 px-4">
+            <div className="flex items-center justify-end gap-2">
+              <BaseButton
+                className="h-7 px-2.5 text-xs"
+                disabled={!puedeActuar || isUpdatingSolicitud}
+                onClick={() => handleAprobar(s.id)}
+              >
+                Aprobar
+              </BaseButton>
+              <BaseButton
+                variant="secondary"
+                className="h-7 px-2.5 text-xs"
+                disabled={!puedeActuar || isUpdatingSolicitud}
+                onClick={() => handleRechazar(s.id)}
+              >
+                Rechazar
+              </BaseButton>
+            </div>
+          </td>
+        </tr>
+      );
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -367,67 +506,7 @@ export default function AdminPlanes() {
               </tr>
             </thead>
             <tbody>
-              {isLoadingPlanes ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-sm text-gray-400">
-                    Cargando planes...
-                  </td>
-                </tr>
-              ) : planes.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-8 text-center text-sm text-gray-400">
-                    No hay planes registrados.
-                  </td>
-                </tr>
-              ) : (
-                planes.map((p) => {
-                  const borrador = borradores[p.id] || {
-                    precio: String(p.precio ?? 0),
-                    discoMaxMB: String(p.discoMaxMB ?? 0),
-                    habilitado: p.habilitado ?? true,
-                  };
-                  return (
-                    <tr
-                      key={p.id}
-                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="py-3 px-5 font-medium text-gray-900">{p.nombre || p.name}</td>
-                      <td className="py-3 px-5">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={borrador.habilitado}
-                            onChange={(e) => updateBorrador(p.id, "habilitado", e.target.checked)}
-                          />
-                          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
-                          <span className="ml-2 text-xs text-gray-600">
-                            {borrador.habilitado ? "Activo" : "Inactivo"}
-                          </span>
-                        </label>
-                      </td>
-                      <td className="py-3 px-5">
-                        <input
-                          type="number"
-                          min="0"
-                          value={borrador.precio}
-                          onChange={(e) => updateBorrador(p.id, "precio", e.target.value)}
-                          className="h-8 w-28 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
-                        />
-                      </td>
-                      <td className="py-3 px-5">
-                        <input
-                          type="number"
-                          min="0"
-                          value={borrador.discoMaxMB}
-                          onChange={(e) => updateBorrador(p.id, "discoMaxMB", e.target.value)}
-                          className="h-8 w-28 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              {planesTableBody}
             </tbody>
           </table>
         </div>
@@ -462,66 +541,7 @@ export default function AdminPlanes() {
               </tr>
             </thead>
             <tbody>
-              {isLoadingSolicitudes ? (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
-                    Cargando solicitudes...
-                  </td>
-                </tr>
-              ) : solicitudes.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
-                    No hay solicitudes registradas.
-                  </td>
-                </tr>
-              ) : (
-                solicitudes.map((s) => {
-                  const puedeActuar = s.estado === "Pendiente";
-                  return (
-                    <tr
-                      key={s.id}
-                      className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="py-3 px-4 font-medium text-gray-900">{s.planSolicitado}</td>
-                      <td className="py-3 px-4 text-gray-500">{s.usuario || getNombreUsuario(s.usuarioId)}</td>
-                      <td className="py-3 px-4 text-gray-500">{s.tipo}</td>
-                      <td className="py-3 px-4 text-right text-gray-500">{s.meses}</td>
-                      <td className="py-3 px-4 text-right font-medium text-gray-900">
-                        {s.total === "-" ? "-" : `$${s.total}`}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            ESTADO_SOLICITUD_CLASES[s.estado] || "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {s.estado}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-gray-500">{s.creadoEn}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <BaseButton
-                            className="h-7 px-2.5 text-xs"
-                            disabled={!puedeActuar || isUpdatingSolicitud}
-                            onClick={() => handleAprobar(s.id)}
-                          >
-                            Aprobar
-                          </BaseButton>
-                          <BaseButton
-                            variant="secondary"
-                            className="h-7 px-2.5 text-xs"
-                            disabled={!puedeActuar || isUpdatingSolicitud}
-                            onClick={() => handleRechazar(s.id)}
-                          >
-                            Rechazar
-                          </BaseButton>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              {solicitudesTableBody}
             </tbody>
           </table>
         </div>

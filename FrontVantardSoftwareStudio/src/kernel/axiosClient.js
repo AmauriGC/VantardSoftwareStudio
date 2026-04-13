@@ -157,7 +157,7 @@ axiosClient.interceptors.response.use(
           globalThis.location.replace("/");
         }
 
-        return Promise.reject(error);
+        throw error;
       }
     }
 
@@ -170,6 +170,6 @@ axiosClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error);
+    throw error;
   }
 );
