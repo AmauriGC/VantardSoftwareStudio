@@ -88,6 +88,16 @@ export default class DeploymentService {
     }
   }
 
+  static async inactivateDeployment(deploymentId) {
+    try {
+      await axiosClient.delete(ENDPOINTS.deployments.detail(deploymentId));
+      return { ok: true };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
   static async getTraffic(days = 7, deploymentId = null) {
     try {
       const response = await axiosClient.get(ENDPOINTS.deployments.traffic, {
