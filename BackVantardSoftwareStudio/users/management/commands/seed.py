@@ -1,8 +1,13 @@
 """
 Comando para sembrar los datos iniciales requeridos por la aplicación.
 
-Crea los roles (Admin, User) y planes base (Free, Basic, Pro) si no existen.
+Crea los roles (Admin, User), planes base (Free, Basic, Pro) y el usuario
+administrador inicial si no existen.
 Es idempotente: puede ejecutarse múltiples veces sin duplicar registros.
+
+Variables de entorno requeridas para el admin:
+    ADMIN_EMAIL     correo del administrador inicial
+    ADMIN_PASSWORD  contraseña del administrador inicial
 
 Uso:
     python manage.py seed
@@ -11,11 +16,12 @@ Uso:
 
 from decimal import Decimal
 
+from decouple import config
 from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Siembra roles y planes iniciales necesarios para el funcionamiento del sistema."
+    help = "Siembra roles, planes y usuario administrador iniciales."
 
     ROLES = ["Admin", "User"]
 
@@ -28,6 +34,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self._seed_roles(options["verbosity"])
         self._seed_plans(options["verbosity"])
+        self._seed_admin(options["verbosity"])
         if options["verbosity"] >= 1:
             self.stdout.write(self.style.SUCCESS("Datos iniciales sembrados correctamente."))
 
@@ -55,3 +62,35 @@ class Command(BaseCommand):
             if verbosity >= 1:
                 status = "creado" if created else "ya existía"
                 self.stdout.write(f"  Plan '{p['name']}': {status}")
+
+    def _seed_admin(self, verbosity):
+        from users.models import User
+        from roles.models import Role
+
+        email    = config("ADMIN_EMAIL", default="")
+        password = config("ADMIN_PASSWORD", default="")
+
+        if not email or not password:
+            if verbosity >= 1:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "  Admin omitido: define ADMIN_EMAIL y ADMIN_PASSWORD en el entorno."
+                    )
+                )
+            return
+
+        if User.objects.filter(email=email).exists():
+            if verbosity >= 1:
+                self.stdout.write(f"  Admin '{email}': ya existía")
+            return
+
+        admin_role = Role.objects.get(role_name="Admin")
+        User.objects.create_superuser(
+            email=email,
+            password=password,
+            first_name="Admin",
+            last_name="VSS",
+            role=admin_role,
+        )
+        if verbosity >= 1:
+            self.stdout.write(self.style.SUCCESS(f"  Admin '{email}': creado"))
