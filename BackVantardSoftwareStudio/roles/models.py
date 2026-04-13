@@ -20,9 +20,6 @@ class Role(models.Model):
         ordering = ['role_name']
         verbose_name = 'Role'
         verbose_name_plural = 'Roles'
-        indexes = [
-            models.Index(fields=['role_name'], name='idx_roles_role_name'),
-        ]
 
     def __str__(self):
         return self.role_name

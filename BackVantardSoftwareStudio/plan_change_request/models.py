@@ -1,15 +1,19 @@
 # plan_change_requests/models.py
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
+
+
+class PlanChangeRequestStatus(models.TextChoices):
+    PENDING = 'pending', 'Pending'
+    APPROVED = 'approved', 'Approved'
+    REJECTED = 'rejected', 'Rejected'
+    COMPLETED = 'completed', 'Completed'
+    CANCELLED = 'cancelled', 'Cancelled'
 
 class PlanChangeRequest(models.Model):
 
-    class Status(models.TextChoices):
-        PENDING   = 'pending',   'Pending'
-        APPROVED  = 'approved',  'Approved'
-        REJECTED  = 'rejected',  'Rejected'
-        COMPLETED = 'completed', 'Completed'
-        CANCELLED = 'cancelled', 'Cancelled'
+    Status = PlanChangeRequestStatus
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -51,7 +55,8 @@ class PlanChangeRequest(models.Model):
         blank=True,
     )
 
-    reason = models.TextField(
+    reason = models.CharField(
+        max_length=500,
         blank=True,
         default='',
         db_column='reason',
@@ -108,12 +113,21 @@ class PlanChangeRequest(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Plan Change Request'
         verbose_name_plural = 'Plan Change Requests'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_plan_change_requests_status_valid',
+                condition=Q(
+                    status__in=[
+                        PlanChangeRequestStatus.PENDING,
+                        PlanChangeRequestStatus.APPROVED,
+                        PlanChangeRequestStatus.REJECTED,
+                        PlanChangeRequestStatus.COMPLETED,
+                        PlanChangeRequestStatus.CANCELLED,
+                    ]
+                ),
+            ),
+        ]
         indexes = [
-            models.Index(fields=['user'], name='idx_plan_change_req_user_id'),
-            models.Index(fields=['current_plan'], name='idx_plan_change_req_current'),
-            models.Index(fields=['requested_plan'], name='idx_plan_change_req_requested'),
-            models.Index(fields=['status'], name='idx_plan_change_req_status'),
-            models.Index(fields=['reviewed_by'], name='idx_plan_change_req_reviewer'),
             models.Index(fields=['created_at'], name='idx_plan_change_req_created_at'),
             models.Index(fields=['deleted_at'], name='idx_plan_change_req_deleted_at'),
         ]
