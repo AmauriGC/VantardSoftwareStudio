@@ -9,17 +9,18 @@ SET FOREIGN_KEY_CHECKS = 0;
 DELIMITER $$
 
 CREATE TRIGGER `trg_validate_storage_limit`
-BEFORE INSERT ON `deployment_versions` FOR EACH ROW
+BEFORE INSERT ON `deployments`
+FOR EACH ROW
 BEGIN
     DECLARE allowed_space INT;
 
     SELECT p.max_disk_mb
     INTO allowed_space
-    FROM deployments d
-    JOIN user_plans up ON d.user_id = up.user_id
+    FROM user_plans up
     JOIN plans p ON up.plan_id = p.id
-    WHERE d.id = NEW.deployment_id
+    WHERE up.user_id = NEW.user_id
       AND up.status = 'active'
+      AND up.deleted_at IS NULL
     LIMIT 1;
 
     IF allowed_space IS NOT NULL AND NEW.disk_used_mb > allowed_space THEN
@@ -28,13 +29,19 @@ BEGIN
     END IF;
 END$$
 
-CREATE TRIGGER `trg_replace_previous_version`
-BEFORE INSERT ON `deployment_versions` FOR EACH ROW
+DELIMITER ;
+
+DELIMITER $$
+
+CREATE TRIGGER `trg_replace_previous_deployment`
+BEFORE INSERT ON `deployments`
+FOR EACH ROW
 BEGIN
-    UPDATE deployment_versions
+    UPDATE deployments
     SET status = 'replaced'
-    WHERE deployment_id = NEW.deployment_id
-      AND status = 'active';
+    WHERE user_id = NEW.user_id
+      AND status = 'active'
+      AND deleted_at IS NULL;
 END$$
 
 DELIMITER ;
@@ -107,11 +114,15 @@ END$$
 DELIMITER ;
 
 
-CREATE EVENT IF NOT EXISTS `event_monthly_traffic_reset`
-ON SCHEDULE EVERY 1 MONTH
+CREATE EVENT IF NOT EXISTS `event_deactivate_inactive_deployments`
+ON SCHEDULE EVERY 1 DAY
 DO
   UPDATE deployments
-  SET traffic_visit_count = 0;
+  SET status = 'inactive'
+  WHERE traffic_visit_count = 0
+    AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+    AND status = 'active'
+    AND deleted_at IS NULL;
 
 -- ========================
 -- VIEWS
@@ -139,5 +150,107 @@ JOIN deployments d ON u.id = d.user_id
 JOIN user_plans up ON u.id = up.user_id
 JOIN plans p ON up.plan_id = p.id
 WHERE up.status = 'active';
+
+
+-- ========================
+-- DASHBOARD VIEWS (Admin/User)
+-- ========================
+
+-- Admin: métricas generales (una sola fila)
+DROP VIEW IF EXISTS vw_admin_dashboard_stats;
+CREATE VIEW vw_admin_dashboard_stats AS
+SELECT
+  1 AS id,
+  (
+    SELECT COUNT(*)
+    FROM users u
+    WHERE u.deleted_at IS NULL
+  ) AS total_users,
+  (
+    SELECT COUNT(DISTINCT up.user_id)
+    FROM user_plans up
+    WHERE up.deleted_at IS NULL
+      AND up.status = 'active'
+      AND up.expiration_date > NOW()
+  ) AS active_users,
+  (
+    SELECT COUNT(*)
+    FROM deployments d
+    WHERE d.deleted_at IS NULL
+  ) AS total_deployments,
+  (
+    SELECT COUNT(*)
+    FROM deployments d
+    WHERE d.deleted_at IS NULL
+      AND d.status = 'active'
+  ) AS active_deployments,
+  (
+    SELECT COALESCE(SUM(d.disk_used_mb), 0)
+    FROM deployments d
+    WHERE d.deleted_at IS NULL
+  ) AS total_disk_used_mb,
+  (
+    SELECT COALESCE(SUM(d.traffic_visit_count), 0)
+    FROM deployments d
+    WHERE d.deleted_at IS NULL
+  ) AS total_traffic_visit_count;
+
+
+-- Admin: distribución de planes (cuenta usuarios con suscripción activa vigente)
+DROP VIEW IF EXISTS vw_admin_plan_distribution;
+CREATE VIEW vw_admin_plan_distribution AS
+SELECT
+  p.id AS id,
+  p.name AS plan_name,
+  COALESCE(COUNT(DISTINCT up.user_id), 0) AS user_count
+FROM plans p
+LEFT JOIN user_plans up
+  ON up.plan_id = p.id
+   AND up.deleted_at IS NULL
+   AND up.status = 'active'
+   AND up.expiration_date > NOW()
+WHERE p.deleted_at IS NULL
+GROUP BY p.id, p.name;
+
+
+-- Admin: conteo por status real (active/replaced/failed/etc)
+DROP VIEW IF EXISTS vw_admin_deployment_state_counts;
+CREATE VIEW vw_admin_deployment_state_counts AS
+SELECT
+  d.status AS estado,
+  COUNT(*) AS cantidad
+FROM deployments d
+WHERE d.deleted_at IS NULL
+GROUP BY d.status;
+
+
+-- User: métricas del dashboard por usuario (una fila por user_id)
+DROP VIEW IF EXISTS vw_user_dashboard_profile;
+CREATE VIEW vw_user_dashboard_profile AS
+SELECT
+  u.id AS user_id,
+  u.first_name,
+  u.last_name,
+  u.email,
+  MAX(p.name) AS plan_name,
+  COALESCE(MAX(p.max_disk_mb), 0) AS plan_max_disk_mb,
+  COALESCE(MAX(CASE WHEN d.status = 'active' THEN d.disk_used_mb END), 0) AS used_disk_mb,
+  COALESCE(SUM(d.traffic_visit_count), 0) AS total_traffic_visit_count,
+  MAX(CASE WHEN d.status = 'active' THEN d.domain END) AS active_site_domain,
+  MAX(CASE WHEN d.status = 'active' THEN d.disk_used_mb END) AS active_site_disk_used_mb
+FROM users u
+LEFT JOIN user_plans up
+  ON up.user_id = u.id
+   AND up.deleted_at IS NULL
+   AND up.status = 'active'
+   AND up.expiration_date > NOW()
+LEFT JOIN plans p
+  ON p.id = up.plan_id
+   AND p.deleted_at IS NULL
+LEFT JOIN deployments d
+  ON d.user_id = u.id
+   AND d.deleted_at IS NULL
+WHERE u.deleted_at IS NULL
+GROUP BY u.id, u.first_name, u.last_name, u.email;
 
 SET FOREIGN_KEY_CHECKS = 1;
