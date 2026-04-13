@@ -33,23 +33,36 @@ END$$
 
 DELIMITER ;
 
-DROP TRIGGER IF EXISTS `trg_replace_previous_deployment`;
+DROP TRIGGER IF EXISTS `trg_validate_single_active_deployment`;
 
 DELIMITER $$
 
-CREATE TRIGGER `trg_replace_previous_deployment`
+-- Guardia de integridad: MySQL no permite UPDATE sobre la misma tabla dentro de un trigger
+-- (error 1442), por eso el reemplazo de deployments activos se hace desde Django.
+-- Este trigger actúa como segundo nivel de defensa: si Django falla y llega un INSERT
+-- con status='active' habiendo ya uno activo para ese usuario, MySQL lo rechaza.
+CREATE TRIGGER `trg_validate_single_active_deployment`
 BEFORE INSERT ON `deployments`
 FOR EACH ROW
 BEGIN
-    UPDATE deployments
-    SET status = 'replaced'
-    WHERE user_id = NEW.user_id
-      AND status = 'active'
-      AND deleted_at IS NULL;
+    DECLARE active_count INT DEFAULT 0;
+
+    IF NEW.status = 'active' THEN
+        SELECT COUNT(*)
+        INTO active_count
+        FROM deployments
+        WHERE user_id = NEW.user_id
+          AND status = 'active'
+          AND deleted_at IS NULL;
+
+        IF active_count > 0 THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'El usuario ya tiene un deployment activo. El anterior debe reemplazarse primero.';
+        END IF;
+    END IF;
 END$$
 
 DELIMITER ;
-
 -- ========================
 -- EVENTS
 -- ========================
