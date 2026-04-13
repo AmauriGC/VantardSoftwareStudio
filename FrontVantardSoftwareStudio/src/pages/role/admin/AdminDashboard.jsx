@@ -1,42 +1,73 @@
 import { Users, Globe, HardDrive, Activity } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import BaseCard from "../../../components/BaseCard";
 import StatCard from "../../../components/StatCard";
-import {
-  estadisticasGlobales,
-  despliegues,
-  planes,
-  usuarios,
-} from "../../../data/mockData";
+
+import { showErrorAlert } from "../../../kernel/alerts";
+import AdminDashboardService from "./service/AdminDashboardService";
 
 const estadoPorColor = {
-  Activo: "bg-green-50 text-green-700",
-  Actualizando: "bg-blue-50 text-blue-700",
-  Error: "bg-red-50 text-red-700",
-  Suspendido: "bg-gray-100 text-gray-600",
+  active: "bg-green-50 text-green-700",
+  replaced: "bg-blue-50 text-blue-700",
+  failed: "bg-red-50 text-red-700",
+  blocked: "bg-gray-100 text-gray-600",
+  inactive: "bg-gray-100 text-gray-600",
 };
 
-const statusData = [
-  {
-    estado: "Activo",
-    cantidad: despliegues.filter((d) => d.estado === "Activo").length,
-  },
-  {
-    estado: "Actualizando",
-    cantidad: despliegues.filter((d) => d.estado === "Actualizando").length,
-  },
-  {
-    estado: "Error",
-    cantidad: despliegues.filter((d) => d.estado === "Error").length,
-  },
-];
-
-const distribucionPlanes = planes.map((p) => ({
-  nombre: p.nombre,
-  cantidad: usuarios.filter((u) => u.plan === p.nombre).length,
-}));
+function getEstadoLabel(estado) {
+  switch (estado) {
+    case "active":
+      return "Activo";
+    case "replaced":
+      return "Reemplazado";
+    case "failed":
+      return "Fallido";
+    case "blocked":
+      return "Bloqueado";
+    case "inactive":
+      return "Inactivo";
+    default:
+      return estado;
+  }
+}
 
 export default function AdminDashboard() {
+  const [data, setData] = useState({
+    totalUsuarios: 0,
+    usuariosActivos: 0,
+    totalDespliegues: 0,
+    desplieguesActivos: 0,
+    almacenamientoUsadoMB: 0,
+    traficoTotal: 0,
+    distribucionPlanes: [],
+    statusData: [],
+  });
+
+  useEffect(() => {
+    const cargar = async () => {
+      const result = await AdminDashboardService.getDashboard();
+      if (result.ok) {
+        setData(result.data);
+      } else {
+        showErrorAlert({
+          title: "Error",
+          text: result.message || "No se pudo cargar el dashboard.",
+        });
+      }
+    };
+
+    cargar();
+  }, []);
+
+  const distribucionPlanes = useMemo(() => {
+    return Array.isArray(data.distribucionPlanes) ? data.distribucionPlanes : [];
+  }, [data.distribucionPlanes]);
+
+  const statusData = useMemo(() => {
+    return Array.isArray(data.statusData) ? data.statusData : [];
+  }, [data.statusData]);
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div>
@@ -50,25 +81,25 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total usuarios"
-          value={estadisticasGlobales.totalUsuarios}
-          description={`${usuarios.filter((u) => u.estadoPlan !== "Suspendido").length} activos`}
+          value={data.totalUsuarios}
+          description={`${data.usuariosActivos} activos`}
           icon={<Users className="h-4 w-4" />}
         />
         <StatCard
           title="Total despliegues"
-          value={estadisticasGlobales.totalDespliegues}
-          description={`${despliegues.filter((d) => d.estado === "Activo").length} activos`}
+          value={data.totalDespliegues}
+          description={`${data.desplieguesActivos} activos`}
           icon={<Globe className="h-4 w-4" />}
         />
         <StatCard
           title="Almacenamiento usado"
-          value={`${estadisticasGlobales.almacenamientoUsadoMB} MB`}
+          value={`${data.almacenamientoUsadoMB} MB`}
           description="En todos los despliegues"
           icon={<HardDrive className="h-4 w-4" />}
         />
         <StatCard
           title="Tráfico total"
-          value={estadisticasGlobales.traficoTotal.toLocaleString("es-MX")}
+          value={Number(data.traficoTotal || 0).toLocaleString("es-MX")}
           description="Visitas totales"
           icon={<Activity className="h-4 w-4" />}
         />
@@ -142,7 +173,7 @@ export default function AdminDashboard() {
                         estadoPorColor[s.estado] || "bg-gray-100 text-gray-600"
                       }`}
                     >
-                      {s.estado}
+                      {getEstadoLabel(s.estado)}
                     </span>
                   </td>
                   <td className="py-3 px-5 text-right font-medium text-gray-900">
