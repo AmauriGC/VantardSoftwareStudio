@@ -146,7 +146,7 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
             raise ZipValidationError('El dominio no está disponible.')
 
         next_version = (
-            Deployment.objects.filter(user=user, deleted_at__isnull=True)
+            Deployment.objects.filter(user=user)
             .aggregate(v=Max('version_number'))
             .get('v')
         )
