@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 class SystemLog(models.Model):
 
@@ -11,11 +12,14 @@ class SystemLog(models.Model):
         OPTIONS = 'OPTIONS','OPTIONS'
         HEAD    = 'HEAD',   'HEAD'
 
-    user_id = models.IntegerField(
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         db_column='user_id',
-        help_text='ID del usuario que realizó la petición (sin FK para preservar el log).'
+        related_name='system_logs',
+        help_text='Usuario que realizó la petición (FK; se permite null).'
     )
     ip_address = models.CharField(
         max_length=45,
@@ -60,7 +64,6 @@ class SystemLog(models.Model):
         verbose_name = 'System Log'
         verbose_name_plural = 'System Logs'
         indexes = [
-            models.Index(fields=['user_id'],     name='idx_system_logs_user_id'),
             models.Index(fields=['ip_address'],  name='idx_system_logs_ip'),
             models.Index(fields=['action'],      name='idx_system_logs_action'),
             models.Index(fields=['status_code'], name='idx_system_logs_status_code'),

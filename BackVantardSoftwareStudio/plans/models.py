@@ -1,10 +1,15 @@
 from django.db import models
+from django.db.models import Q
+
+
+class PlanStatus(models.TextChoices):
+    ACTIVE = 'active', 'Active'
+    INACTIVE = 'inactive', 'Inactive'
+
 
 class Plan(models.Model):
 
-    class Status(models.TextChoices):
-        ACTIVE   = 'active',   'Active'
-        INACTIVE = 'inactive', 'Inactive'
+    Status = PlanStatus
 
     name = models.CharField(
         max_length=50,
@@ -41,9 +46,13 @@ class Plan(models.Model):
         ordering        = ['price']
         verbose_name    = 'Plan'
         verbose_name_plural = 'Plans'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_plans_status_valid',
+                condition=Q(status__in=['active', 'inactive']),
+            ),
+        ]
         indexes = [
-            models.Index(fields=['status'],     name='idx_plans_status'),
-            models.Index(fields=['price'],      name='idx_plans_price'),
             models.Index(fields=['deleted_at'], name='idx_plans_deleted_at'),
         ]
 

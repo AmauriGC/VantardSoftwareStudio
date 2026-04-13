@@ -1,11 +1,14 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 
 class UserPlan(models.Model):
 
     class Status(models.TextChoices):
-        ACTIVE  = 'active',  'Active'
+        ACTIVE = 'active', 'Active'
         EXPIRED = 'expired', 'Expired'
+        CANCELLED = 'cancelled', 'Cancelled'
+    
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -61,10 +64,13 @@ class UserPlan(models.Model):
         ordering        = ['-purchase_date']
         verbose_name    = 'User Plan'
         verbose_name_plural = 'User Plans'
+        constraints = [
+            models.CheckConstraint(
+                name='chk_user_plans_status_valid',
+                condition=Q(status__in=['active', 'expired', 'cancelled']),
+            ),
+        ]
         indexes = [
-            models.Index(fields=['user'],            name='idx_user_plans_user_id'),
-            models.Index(fields=['plan'],            name='idx_user_plans_plan_id'),
-            models.Index(fields=['status'],          name='idx_user_plans_status'),
             models.Index(fields=['purchase_date'],   name='idx_user_plans_purchase_date'),
             models.Index(fields=['expiration_date'], name='idx_user_plans_expiration_date'),
             models.Index(fields=['deleted_at'],      name='idx_user_plans_deleted_at'),
@@ -99,6 +105,11 @@ class UserPlan(models.Model):
         self.deleted_at = timezone.now()
         self.status     = self.Status.EXPIRED
         self.save(update_fields=['deleted_at', 'status', 'updated_at'])
+
+    def cancel(self):
+
+        self.status = self.Status.CANCELLED
+        self.save(update_fields=['status', 'updated_at'])
 
     @classmethod
     def calculate_total(cls, plan_price: float, months: int) -> float:
