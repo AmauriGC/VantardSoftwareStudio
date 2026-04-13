@@ -35,8 +35,8 @@ class PlanCreateSerializer(serializers.Serializer):
     price       = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     max_disk_mb = serializers.IntegerField(min_value=1)
     status      = serializers.ChoiceField(
-        choices=Plan.Status.choices,
-        default=Plan.Status.ACTIVE,
+        choices=Plan.StatusChoices.choices,
+        default=Plan.StatusChoices.ACTIVE,
         required=False,
     )
 
@@ -54,7 +54,7 @@ class PlanUpdateSerializer(serializers.Serializer):
     name        = serializers.CharField(max_length=50, required=False)
     price       = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False)
     max_disk_mb = serializers.IntegerField(min_value=1, required=False)
-    status      = serializers.ChoiceField(choices=Plan.Status.choices, required=False)
+    status      = serializers.ChoiceField(choices=Plan.StatusChoices.choices, required=False)
 
     def validate(self, attrs):
         if not attrs:

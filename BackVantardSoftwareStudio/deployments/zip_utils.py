@@ -155,6 +155,49 @@ def save_zip_file_for_user(
     return str(Path('deployments') / f'u{user_id}' / zip_filename)
 
 
+def _prepare_temp_dir(tmp_dir: Path) -> None:
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _extract_zipfile_to_dir(zf: zipfile.ZipFile, dest_root: Path) -> None:
+    dest_root_resolved = dest_root.resolve()
+
+    for member in zf.infolist():
+        if member.is_dir():
+            continue
+
+        dest = dest_root / Path(member.filename)
+
+        try:
+            dest.resolve().relative_to(dest_root_resolved)
+        except ValueError:
+            continue
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        with zf.open(member) as src, open(dest, 'wb') as out:
+            shutil.copyfileobj(src, out)
+
+
+def _swap_site_dirs(*, tmp_dir: Path, final_dir: Path, backup_dir: Path) -> None:
+    backed_up = False
+    if final_dir.exists():
+        shutil.move(str(final_dir), str(backup_dir))
+        backed_up = True
+
+    try:
+        shutil.move(str(tmp_dir), str(final_dir))
+    except Exception:
+        if backed_up and backup_dir.exists() and not final_dir.exists():
+            shutil.move(str(backup_dir), str(final_dir))
+        raise
+    else:
+        if backed_up and backup_dir.exists():
+            shutil.rmtree(backup_dir)
+
+
 def extract_zip_to_site(zip_abs_path: Path, domain: str, media_root: Path) -> None:
     """Extrae el ZIP en media/sites/{domain}/ de forma segura.
 
@@ -169,45 +212,15 @@ def extract_zip_to_site(zip_abs_path: Path, domain: str, media_root: Path) -> No
     tmp_dir = sites_root / f'.tmp_{domain}_{uuid4().hex}'
     backup_dir = sites_root / f'.bak_{domain}_{uuid4().hex}'
 
-    if tmp_dir.exists():
-        shutil.rmtree(tmp_dir)
-    tmp_dir.mkdir(parents=True, exist_ok=True)
+    _prepare_temp_dir(tmp_dir)
 
     try:
         with zipfile.ZipFile(zip_abs_path, 'r') as zf:
-            for member in zf.infolist():
-                if member.is_dir():
-                    continue
-
-                dest = tmp_dir / Path(member.filename)
-
-                try:
-                    dest.resolve().relative_to(tmp_dir.resolve())
-                except ValueError:
-                    continue
-
-                dest.parent.mkdir(parents=True, exist_ok=True)
-
-                with zf.open(member) as src, open(dest, 'wb') as out:
-                    out.write(src.read())
+            _extract_zipfile_to_dir(zf, tmp_dir)
 
         # Swap seguro: primero respaldar el sitio publicado, luego publicar el nuevo.
         # Esto evita perder el sitio activo si ocurre un error al mover.
-        backed_up = False
-        if final_dir.exists():
-            shutil.move(str(final_dir), str(backup_dir))
-            backed_up = True
-
-        try:
-            shutil.move(str(tmp_dir), str(final_dir))
-        except Exception:
-            # Rollback: si el sitio nuevo no pudo publicarse, restaurar backup.
-            if backed_up and backup_dir.exists() and not final_dir.exists():
-                shutil.move(str(backup_dir), str(final_dir))
-            raise
-        else:
-            if backed_up and backup_dir.exists():
-                shutil.rmtree(backup_dir)
+        _swap_site_dirs(tmp_dir=tmp_dir, final_dir=final_dir, backup_dir=backup_dir)
 
     finally:
         if tmp_dir.exists():

@@ -58,7 +58,7 @@ class CreatePlanChangeRequestView(APIView):
             reason         = data.get('reason', ''),
             months_requested = data.get('months_requested'),
             total_price      = data.get('total_price'),
-            status         = PlanChangeRequest.Status.PENDING,
+            status         = PlanChangeRequest.StatusChoices.PENDING,
         )
 
         log_request(request, 'PLAN_CHANGE_REQUEST_CREATED', 201)
@@ -149,7 +149,7 @@ class ApplyPlanChangeRequestNowView(APIView):
         except PlanChangeRequest.DoesNotExist:
             return error_response(message=SOLICITUD_NOT_FOUND, status=404)
 
-        if change_request.status != PlanChangeRequest.Status.APPROVED:
+        if change_request.status != PlanChangeRequest.StatusChoices.APPROVED:
             return error_response(
                 message='Solo puedes aplicar solicitudes aprobadas.',
                 status=400,
@@ -205,7 +205,7 @@ class AdminPlanChangeRequestListView(APIView):
 
         status_filter = request.query_params.get('status')
         if status_filter:
-            valid_statuses = [s.value for s in PlanChangeRequest.Status]
+            valid_statuses = [s.value for s in PlanChangeRequest.StatusChoices]
             if status_filter not in valid_statuses:
                 return error_response(
                     message=f'Status inválido. Valores permitidos: {", ".join(valid_statuses)}.',

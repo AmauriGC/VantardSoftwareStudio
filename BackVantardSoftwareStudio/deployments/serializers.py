@@ -40,7 +40,7 @@ class DeploymentCreateSerializer(serializers.Serializer):
 # ---------------------------------------------------------------------------
 
 class DeploymentUpdateSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=Deployment.Status.choices, required=False)
+    status = serializers.ChoiceField(choices=Deployment.StatusChoices.choices, required=False)
 
     def validate(self, attrs):
         if not attrs:
