@@ -19,6 +19,9 @@ urlpatterns = [
     path('api/roles/', include('roles.urls')),
     path('api/deployments/', include('deployments.urls')),
     path('api/deployment-versions/', include(version_urlpatterns)),
+
+    # --- Dashboard (SQL views consumidas por API) ---
+    path('api/', include('core.urls')),
     
     # Aqui iras agregando las demas apps:
     # path('api/auth/',        include('auth_app.urls')),

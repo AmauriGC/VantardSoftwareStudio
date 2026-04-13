@@ -46,4 +46,8 @@ export const ENDPOINTS = {
     list: "/api/system-logs/",
     detail: (id) => `/api/system-logs/${id}/`,
   },
+  dashboard: {
+    admin: "/api/dashboard/admin/",
+    user: "/api/dashboard/user/",
+  },
 };
