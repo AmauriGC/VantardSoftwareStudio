@@ -7,6 +7,88 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
 
+class _SqlParser:
+    """Parser de sentencias MySQL con soporte para DELIMITER y strings."""
+
+    def __init__(self):
+        self.delimiter = ";"
+        self._buf: list[str] = []
+        self._in_single = False
+        self._in_double = False
+        self._in_backtick = False
+        self._escape_next = False
+
+    # ------------------------------------------------------------------
+    # Helpers de estado de carácter
+    # ------------------------------------------------------------------
+
+    def _inside_string(self) -> bool:
+        return self._in_single or self._in_double or self._in_backtick
+
+    def _try_consume_escape(self, ch: str) -> bool:
+        if self._escape_next:
+            self._buf.append(ch)
+            self._escape_next = False
+            return True
+        if (self._in_single or self._in_double) and ch == "\\":
+            self._buf.append(ch)
+            self._escape_next = True
+            return True
+        return False
+
+    def _try_toggle_quote(self, ch: str) -> bool:
+        if ch == "'" and not self._in_double and not self._in_backtick:
+            self._in_single = not self._in_single
+        elif ch == '"' and not self._in_single and not self._in_backtick:
+            self._in_double = not self._in_double
+        elif ch == "`" and not self._in_single and not self._in_double:
+            self._in_backtick = not self._in_backtick
+        else:
+            return False
+        self._buf.append(ch)
+        return True
+
+    def _try_emit_at(self, text: str, pos: int):
+        """Si `pos` es el inicio del delimitador (fuera de string), emite la sentencia."""
+        if self._inside_string() or not text.startswith(self.delimiter, pos):
+            return None, pos
+        stmt = "".join(self._buf).strip()
+        self._buf = []
+        return stmt or None, pos + len(self.delimiter)
+
+    # ------------------------------------------------------------------
+    # API pública
+    # ------------------------------------------------------------------
+
+    def feed_line(self, line: str):
+        """Procesa una línea y genera sentencias completas."""
+        text = line + "\n"
+        pos = 0
+        while pos < len(text):
+            ch = text[pos]
+            if self._try_consume_escape(ch) or self._try_toggle_quote(ch):
+                pos += 1
+                continue
+            stmt, pos = self._try_emit_at(text, pos)
+            if stmt is not None:
+                yield stmt
+                continue
+            self._buf.append(ch)
+            pos += 1
+
+    def flush(self):
+        stmt = "".join(self._buf).strip()
+        self._buf = []
+        return stmt or None
+
+
+def _parse_delimiter(raw_line: str, stripped: str) -> str:
+    parts = stripped.split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].strip():
+        raise CommandError(f"DELIMITER inválido: {raw_line}")
+    return parts[1].strip()
+
+
 def _iter_mysql_script_statements(sql_text: str):
     """Itera sentencias MySQL soportando `DELIMITER`.
 
@@ -15,91 +97,21 @@ def _iter_mysql_script_statements(sql_text: str):
     - Cambios de delimitador (`DELIMITER $$` / `DELIMITER ;`).
     - Triggers/Events con `BEGIN ... END` que contienen `;` internos.
     """
-
-    delimiter = ";"
-    buf: list[str] = []
-
-    in_single = False
-    in_double = False
-    in_backtick = False
-    escape_next = False
-
-    def flush_if_complete():
-        nonlocal buf
-        if not buf:
-            return None
-        statement = "".join(buf).strip()
-        if not statement:
-            buf = []
-            return None
-        return statement
+    parser = _SqlParser()
 
     for raw_line in sql_text.splitlines():
-        line = raw_line.rstrip("\n")
-        stripped = line.strip()
+        stripped = raw_line.strip()
 
-        if not stripped:
+        if not stripped or stripped.startswith("--"):
             continue
 
-        if stripped.startswith("--"):
+        if stripped.upper().startswith("DELIMITER "):
+            parser.delimiter = _parse_delimiter(raw_line, stripped)
             continue
 
-        upper = stripped.upper()
-        if upper.startswith("DELIMITER "):
-            parts = stripped.split(maxsplit=1)
-            if len(parts) != 2 or not parts[1].strip():
-                raise CommandError(f"DELIMITER inválido: {raw_line}")
-            delimiter = parts[1].strip()
-            continue
+        yield from parser.feed_line(raw_line.rstrip("\n"))
 
-        line_with_nl = line + "\n"
-        j = 0
-        while j < len(line_with_nl):
-            ch = line_with_nl[j]
-
-            if escape_next:
-                buf.append(ch)
-                escape_next = False
-                j += 1
-                continue
-
-            if (in_single or in_double) and ch == "\\":
-                buf.append(ch)
-                escape_next = True
-                j += 1
-                continue
-
-            if ch == "'" and not in_double and not in_backtick:
-                in_single = not in_single
-                buf.append(ch)
-                j += 1
-                continue
-
-            if ch == '"' and not in_single and not in_backtick:
-                in_double = not in_double
-                buf.append(ch)
-                j += 1
-                continue
-
-            if ch == "`" and not in_single and not in_double:
-                in_backtick = not in_backtick
-                buf.append(ch)
-                j += 1
-                continue
-
-            if not in_single and not in_double and not in_backtick:
-                if delimiter and line_with_nl.startswith(delimiter, j):
-                    stmt = "".join(buf).strip()
-                    buf = []
-                    j += len(delimiter)
-                    if stmt:
-                        yield stmt
-                    continue
-
-            buf.append(ch)
-            j += 1
-
-    tail = flush_if_complete()
+    tail = parser.flush()
     if tail:
         yield tail
 
