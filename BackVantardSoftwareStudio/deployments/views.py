@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -25,7 +25,7 @@ from .serializers import (
     DeploymentOutputSerializer,
     DeploymentUpdateSerializer,
 )
-from .utils import deploy_zip_as_new_deployment
+from .utils import collapse_site_container_dir, deploy_zip_as_new_deployment, detect_site_entry_subdir
 from .zip_utils import ZipValidationError, extract_zip_to_site
 
 
@@ -136,23 +136,11 @@ def _get_site_root(domain: str) -> Path:
 
 
 def _get_effective_site_root(site_root: Path) -> Path:
-    """Algunos ZIP vienen con una carpeta contenedora única.
-
-    Si no hay index en raíz, y existe exactamente una carpeta hija con index, se usa esa carpeta
-    como raíz efectiva del sitio.
-    """
-    root_index = site_root / DEFAULT_INDEX_FILE
-    if root_index.exists():
-        return site_root
-
-    child_dirs = [p for p in site_root.iterdir() if p.is_dir()]
-    if len(child_dirs) == 1 and (child_dirs[0] / DEFAULT_INDEX_FILE).exists():
-        return child_dirs[0]
-
-    return site_root
+    """Colapsa carpetas contenedoras típicas de ZIP para obtener la raíz efectiva del sitio."""
+    return collapse_site_container_dir(site_root)
 
 
-def _resolve_site_file_path(*, effective_root: Path, file_path: str | None) -> Path:
+def _resolve_site_file_path(*, effective_root: Path, file_path: str | None, entry_subdir: str | None = None) -> Path:
     safe_relative = file_path or DEFAULT_INDEX_FILE
     target_path = (effective_root / safe_relative).resolve()
 
@@ -171,6 +159,14 @@ def _resolve_site_file_path(*, effective_root: Path, file_path: str | None) -> P
     spa_index = effective_root / DEFAULT_INDEX_FILE
     if spa_index.exists() and spa_index.is_file():
         return spa_index
+
+    # Soportar SPA dentro de subcarpeta (p.ej. /html/ o /dist/)
+    if entry_subdir:
+        entry_prefix = f'{entry_subdir}/'
+        if safe_relative == entry_subdir or safe_relative.startswith(entry_prefix):
+            spa_index = effective_root / entry_subdir / DEFAULT_INDEX_FILE
+            if spa_index.exists() and spa_index.is_file():
+                return spa_index
 
     raise Http404('Archivo no encontrado.')
 
@@ -205,8 +201,16 @@ def serve_site_file(request, domain, file_path=DEFAULT_INDEX_FILE):
     deployment = _get_active_deployment_for_domain(domain)
     site_root = _get_site_root(domain)
     effective_root = _get_effective_site_root(site_root)
+    entry_subdir = detect_site_entry_subdir(site_root)
 
-    target_path = _resolve_site_file_path(effective_root=effective_root, file_path=file_path)
+    # Si el index está dentro de un subdirectorio, redirigir al entrypoint correcto.
+    safe_relative = file_path or DEFAULT_INDEX_FILE
+    if entry_subdir and safe_relative in {DEFAULT_INDEX_FILE, 'index.htm'}:
+        resolved = (effective_root / safe_relative).resolve()
+        if not resolved.exists():
+            return HttpResponseRedirect(f'/sites/{domain}/{entry_subdir}/')
+
+    target_path = _resolve_site_file_path(effective_root=effective_root, file_path=file_path, entry_subdir=entry_subdir)
     content_type, _ = mimetypes.guess_type(str(target_path))
 
     _track_site_visit_if_needed(
