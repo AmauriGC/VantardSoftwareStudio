@@ -29,12 +29,14 @@ LOG_FORMAT = (
     '{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{function}:{line} - {message}'
 )
 
+LOG_ROTATION_SIZE = '10 MB'
+
 logger.configure(
     handlers=[
         {
             'sink': str(LOG_DIR / 'debug.log'),
             'level': 'DEBUG',
-            'rotation': '10 MB',
+            'rotation': LOG_ROTATION_SIZE,
             'retention': '7 days',
             'compression': 'zip',
             'format': LOG_FORMAT,
@@ -42,7 +44,7 @@ logger.configure(
         {
             'sink': str(LOG_DIR / 'error.log'),
             'level': 'ERROR',
-            'rotation': '10 MB',
+            'rotation': LOG_ROTATION_SIZE,
             'retention': '7 days',
             'compression': 'zip',
             'backtrace': True,
@@ -52,7 +54,7 @@ logger.configure(
         {
             'sink': str(LOG_DIR / 'security.log'),
             'level': 'INFO',
-            'rotation': '10 MB',
+            'rotation': LOG_ROTATION_SIZE,
             'retention': '30 days',
             'compression': 'zip',
             'format': LOG_FORMAT,
@@ -195,8 +197,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'auth_login': '5/minute',
-        'password_reset_request': '3/minute',
-        'password_reset_confirm': '10/minute',
+        'recovery_request': '3/minute',
+        'recovery_confirm': '10/minute',
     },
 }
 

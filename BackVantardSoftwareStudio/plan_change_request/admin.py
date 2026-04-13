@@ -106,7 +106,7 @@ class PlanChangeRequestAdmin(admin.ModelAdmin):
 
     def approve_requests(self, request, queryset):
         """Acción para aprobar solicitudes pendientes."""
-        pending = queryset.filter(status=PlanChangeRequest.Status.PENDING)
+        pending = queryset.filter(status=PlanChangeRequest.StatusChoices.PENDING)
         count = 0
         for obj in pending:
             obj.approve(reviewed_by_user=request.user)
@@ -120,7 +120,7 @@ class PlanChangeRequestAdmin(admin.ModelAdmin):
 
     def reject_requests(self, request, queryset):
         """Acción para rechazar solicitudes pendientes."""
-        pending = queryset.filter(status=PlanChangeRequest.Status.PENDING)
+        pending = queryset.filter(status=PlanChangeRequest.StatusChoices.PENDING)
         count = 0
         for obj in pending:
             obj.reject(reviewed_by_user=request.user)
@@ -134,7 +134,7 @@ class PlanChangeRequestAdmin(admin.ModelAdmin):
 
     def mark_as_completed(self, request, queryset):
         """Acción para marcar como completadas."""
-        approved = queryset.filter(status=PlanChangeRequest.Status.APPROVED)
+        approved = queryset.filter(status=PlanChangeRequest.StatusChoices.APPROVED)
         count = 0
         for obj in approved:
             obj.complete()

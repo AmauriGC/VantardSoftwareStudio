@@ -37,7 +37,7 @@ def create_plan_change_request(user, requested_plan, reason=''):
     # Verificar si ya existe una solicitud pendiente
     pending_request = PlanChangeRequest.objects.filter(
         user=user,
-        status=PlanChangeRequest.Status.PENDING,
+        status=PlanChangeRequest.StatusChoices.PENDING,
         deleted_at__isnull=True
     ).first()
     
@@ -50,7 +50,7 @@ def create_plan_change_request(user, requested_plan, reason=''):
         current_plan=current_user_plan,
         requested_plan=requested_plan,
         reason=reason,
-        status=PlanChangeRequest.Status.PENDING
+        status=PlanChangeRequest.StatusChoices.PENDING
     )
     
     return request_obj
@@ -75,7 +75,7 @@ def approve_plan_change_request(request_id, reviewed_by):
     except PlanChangeRequest.DoesNotExist:
         raise ValueError(SOLICITUD_NOT_FOUND)
     
-    if request_obj.status != PlanChangeRequest.Status.PENDING:
+    if request_obj.status != PlanChangeRequest.StatusChoices.PENDING:
         raise ValueError('Solo se pueden aprobar solicitudes pendientes.')
     
     if request_obj.is_deleted:
@@ -104,7 +104,7 @@ def reject_plan_change_request(request_id, reviewed_by):
     except PlanChangeRequest.DoesNotExist:
         raise ValueError(SOLICITUD_NOT_FOUND)
     
-    if request_obj.status != PlanChangeRequest.Status.PENDING:
+    if request_obj.status != PlanChangeRequest.StatusChoices.PENDING:
         raise ValueError('Solo se pueden rechazar solicitudes pendientes.')
     
     if request_obj.is_deleted:
@@ -141,7 +141,7 @@ def complete_plan_change(request_id):
     except PlanChangeRequest.DoesNotExist:
         raise ValueError(SOLICITUD_NOT_FOUND)
     
-    if request_obj.status != PlanChangeRequest.Status.APPROVED:
+    if request_obj.status != PlanChangeRequest.StatusChoices.APPROVED:
         raise ValueError('Solo se pueden completar solicitudes aprobadas.')
     
     if request_obj.is_deleted:
@@ -195,7 +195,7 @@ def cancel_plan_change_request(request_id):
     except PlanChangeRequest.DoesNotExist:
         raise ValueError(SOLICITUD_NOT_FOUND)
     
-    if request_obj.status == PlanChangeRequest.Status.COMPLETED:
+    if request_obj.status == PlanChangeRequest.StatusChoices.COMPLETED:
         raise ValueError('No se puede cancelar una solicitud ya completada.')
     
     if request_obj.is_deleted:
@@ -217,7 +217,7 @@ def get_pending_requests_by_user(user):
     """
     return PlanChangeRequest.objects.filter(
         user=user,
-        status=PlanChangeRequest.Status.PENDING,
+        status=PlanChangeRequest.StatusChoices.PENDING,
         deleted_at__isnull=True
     ).select_related('current_plan', 'requested_plan')
 
@@ -230,7 +230,7 @@ def get_all_pending_requests():
         QuerySet: Todas las solicitudes pendientes
     """
     return PlanChangeRequest.objects.filter(
-        status=PlanChangeRequest.Status.PENDING,
+        status=PlanChangeRequest.StatusChoices.PENDING,
         deleted_at__isnull=True
     ).select_related(
         'user',

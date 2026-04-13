@@ -71,7 +71,7 @@ class RegisterView(APIView):
             )
 
         free_plan = Plan.objects.filter(
-            status=Plan.Status.ACTIVE,
+            status=Plan.StatusChoices.ACTIVE,
             deleted_at__isnull=True,
             price=0,
         ).order_by('id').first()
@@ -166,7 +166,7 @@ class LoginView(APIView):
                 status=401,
             )
 
-        if not user.is_active or user.status == User.Status.BLOCKED:
+        if not user.is_active or user.status == User.StatusChoices.BLOCKED:
             security_logger.warning(
                 'Login bloqueado por estado de cuenta | user_id={} email={} ip={}',
                 user.pk,
@@ -336,14 +336,14 @@ class ChangePasswordView(APIView):
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'password_reset_request'
+    throttle_scope = 'recovery_request'
 
     def post(self, request):
         ip_address = _get_client_ip(request)
         serializer = PasswordResetRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -508,7 +508,7 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = 'password_reset_confirm'
+    throttle_scope = 'recovery_confirm'
     renderer_classes = [AESRenderer]
 
     def post(self, request):
@@ -533,7 +533,7 @@ class PasswordResetConfirmView(APIView):
         serializer = PasswordResetConfirmSerializer(data=decrypted)
         if not serializer.is_valid():
             return error_response(
-                message='Datos inválidos.',
+                message=INVALID_DATA_MSG,
                 data=serializer.errors,
                 status=400,
             )
@@ -614,7 +614,7 @@ class UserListView(APIView):
         search        = request.query_params.get('search')
 
         if status_filter:
-            valid_statuses = [s.value for s in User.Status]
+            valid_statuses = [s.value for s in User.StatusChoices]
             if status_filter not in valid_statuses:
                 return error_response(
                     message=f'Status inválido. Valores permitidos: {", ".join(valid_statuses)}.',
@@ -718,7 +718,7 @@ class UserUpdateStatusView(APIView):
             )
 
         user.status    = serializer.validated_data['status']
-        user.is_active = user.status == User.Status.ACTIVE
+        user.is_active = user.status == User.StatusChoices.ACTIVE
         user.save(update_fields=['status', 'is_active', 'updated_at'])
 
         log_request(request, 'ADMIN_UPDATE_USER_STATUS', 200, user_id=user.pk)

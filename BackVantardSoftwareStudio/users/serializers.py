@@ -7,7 +7,12 @@ from user_plans.models import UserPlan
 from deployments.models import Deployment
 
 
-NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿÑñ\s'.-]+$")
+EMAIL_ALREADY_EXISTS_MSG = 'Ya existe una cuenta con este correo.'
+FIRST_NAME_LABEL = 'El nombre'
+LAST_NAME_LABEL = 'El apellido'
+
+# Nota: Ñ/ñ ya están incluidos en los rangos Unicode À-Ö y Ø-ö/ø-ÿ.
+NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ\s'.-]+$")
 
 
 def _validate_person_name(value, field_label):
@@ -55,14 +60,14 @@ class UserRegisterSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
         return value.lower()
 
     def validate_first_name(self, value):
-        return _validate_person_name(value, 'El nombre')
+        return _validate_person_name(value, FIRST_NAME_LABEL)
 
     def validate_last_name(self, value):
-        return _validate_person_name(value, 'El apellido')
+        return _validate_person_name(value, LAST_NAME_LABEL)
 
     def validate_password(self, value):
         return _validate_strong_password(value)
@@ -134,7 +139,7 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
         return (
             Deployment.objects.filter(
                 user=obj,
-                status=Deployment.Status.ACTIVE,
+                status=Deployment.StatusChoices.ACTIVE,
                 deleted_at__isnull=True,
             )
             .order_by('-created_at')
@@ -180,8 +185,7 @@ class UserProfileOutputSerializer(serializers.ModelSerializer):
         return getattr(deployment, 'domain', None)
 
     def get_active_site_disk_used_mb(self, obj):
-        deployment = self._get_latest_active_deployment(obj)
-        return int(getattr(deployment, 'disk_used_mb', 0) or 0)
+        return self.get_used_disk_mb(obj)
 
     def get_total_traffic_visit_count(self, obj):
         total = (
@@ -207,10 +211,10 @@ class UserUpdateProfileSerializer(serializers.Serializer):
         return attrs
 
     def validate_first_name(self, value):
-        return _validate_person_name(value, 'El nombre')
+        return _validate_person_name(value, FIRST_NAME_LABEL)
 
     def validate_last_name(self, value):
-        return _validate_person_name(value, 'El apellido')
+        return _validate_person_name(value, LAST_NAME_LABEL)
 
 
 # ---------------------------------------------------------------------------
@@ -245,14 +249,14 @@ class AdminCreateUserSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         if User.objects.filter(email=value.lower()).exists():
-            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
         return value.lower()
 
     def validate_first_name(self, value):
-        return _validate_person_name(value, 'El nombre')
+        return _validate_person_name(value, FIRST_NAME_LABEL)
 
     def validate_last_name(self, value):
-        return _validate_person_name(value, 'El apellido')
+        return _validate_person_name(value, LAST_NAME_LABEL)
 
     def validate_password(self, value):
         return _validate_strong_password(value)
@@ -269,10 +273,10 @@ class AdminUpdateUserSerializer(serializers.Serializer):
     email      = serializers.EmailField(max_length=150)
 
     def validate_first_name(self, value):
-        return _validate_person_name(value, 'El nombre')
+        return _validate_person_name(value, FIRST_NAME_LABEL)
 
     def validate_last_name(self, value):
-        return _validate_person_name(value, 'El apellido')
+        return _validate_person_name(value, LAST_NAME_LABEL)
 
     def validate_email(self, value):
         normalized = value.lower()
@@ -281,7 +285,7 @@ class AdminUpdateUserSerializer(serializers.Serializer):
         if user is not None:
             qs = qs.exclude(pk=user.pk)
         if qs.exists():
-            raise serializers.ValidationError('Ya existe una cuenta con este correo.')
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
         return normalized
 
 
@@ -371,7 +375,7 @@ class UserListOutputSerializer(serializers.ModelSerializer):
 # ---------------------------------------------------------------------------
 
 class UserUpdateStatusSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=User.Status.choices)
+    status = serializers.ChoiceField(choices=User.StatusChoices.choices)
 
 
 # ---------------------------------------------------------------------------

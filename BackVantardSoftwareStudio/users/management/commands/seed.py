@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 defaults={
                     "price": p["price"],
                     "max_disk_mb": p["max_disk_mb"],
-                    "status": Plan.Status.ACTIVE,
+                    "status": Plan.StatusChoices.ACTIVE,
                 },
             )
             if verbosity >= 1:

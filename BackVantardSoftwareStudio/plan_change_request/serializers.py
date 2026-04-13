@@ -28,7 +28,7 @@ class CreatePlanChangeRequestSerializer(serializers.Serializer):
         # No puede tener una solicitud pendiente o aprobada al mismo tiempo
         has_pending = PlanChangeRequest.objects.filter(
             user=user,
-            status__in=[PlanChangeRequest.Status.PENDING, PlanChangeRequest.Status.APPROVED],
+            status__in=[PlanChangeRequest.StatusChoices.PENDING, PlanChangeRequest.StatusChoices.APPROVED],
             deleted_at__isnull=True,
         ).exists()
         if has_pending:
@@ -38,7 +38,7 @@ class CreatePlanChangeRequestSerializer(serializers.Serializer):
         try:
             plan = Plan.objects.get(
                 pk=attrs['requested_plan_id'],
-                status=Plan.Status.ACTIVE,
+                status=Plan.StatusChoices.ACTIVE,
                 deleted_at__isnull=True,
             )
         except Plan.DoesNotExist:
