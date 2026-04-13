@@ -1,11 +1,11 @@
-import { Globe, HardDrive, Activity, UploadCloud, ExternalLink } from "lucide-react";
+import { Globe, HardDrive, Activity, UploadCloud, ExternalLink, EyeOff, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseTable from "../../../components/BaseTable";
 import { formatearFecha } from "../../../utils/formatters";
-import { showErrorAlert } from "../../../kernel/alerts";
+import { showErrorAlert, showSuccessAlert, confirmAction } from "../../../kernel/alerts";
 import DeploymentService from "./service/DeploymentService";
 
 const deploymentColumns = [
@@ -88,6 +88,14 @@ export default function UserDespliegue() {
   const [tablePage, setTablePage] = useState(1);
   const [tableTotal, setTableTotal] = useState(0);
   const TABLE_PAGE_SIZE = 10;
+  const [inactivando, setInactivando] = useState(false);
+  const [activando, setActivando] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refrescar = () => {
+    setTablePage(1);
+    setRefreshKey((k) => k + 1);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -155,7 +163,53 @@ export default function UserDespliegue() {
     return () => {
       cancelled = true;
     };
-  }, [tablePage]);
+  }, [tablePage, refreshKey]);
+
+  const handleInactivar = async () => {
+    if (!miDespliegue) return;
+    const confirmed = await confirmAction({
+      title: "¿Inactivar el sitio?",
+      text: "El sitio dejará de estar disponible públicamente. Puedes volver a activarlo desde esta misma pantalla.",
+      confirmText: "Inactivar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    setInactivando(true);
+    const result = await DeploymentService.inactivateDeployment(miDespliegue.id);
+    setInactivando(false);
+
+    if (!result.ok) {
+      showErrorAlert({ title: "Error", text: result.message || "No se pudo inactivar el despliegue." });
+      return;
+    }
+
+    await showSuccessAlert({ title: "Sitio inactivado", text: "Tu sitio ya no está disponible públicamente." });
+    refrescar();
+  };
+
+  const handleActivar = async () => {
+    if (!miDespliegue) return;
+    const confirmed = await confirmAction({
+      title: "¿Activar el sitio?",
+      text: "Tu sitio volverá a estar disponible públicamente.",
+      confirmText: "Activar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    setActivando(true);
+    const result = await DeploymentService.activateDeployment(miDespliegue.id);
+    setActivando(false);
+
+    if (!result.ok) {
+      showErrorAlert({ title: "Error", text: result.message || "No se pudo activar el despliegue." });
+      return;
+    }
+
+    await showSuccessAlert({ title: "Sitio activado", text: "Tu sitio ya está disponible públicamente." });
+    refrescar();
+  };
 
   if (loading) {
     return (
@@ -248,10 +302,34 @@ export default function UserDespliegue() {
           <h1 className="text-2xl font-semibold text-gray-900">Mi despliegue</h1>
           <p className="text-sm text-gray-500 mt-0.5">Gestión de tu sitio web estático</p>
         </div>
-        <BaseButton onClick={() => navigate("/user/nuevo-despliegue")}>
-          <UploadCloud className="h-4 w-4 mr-1.5" />
-          Actualizar sitio
-        </BaseButton>
+        <div className="flex items-center gap-2">
+          {String(statusRaw).toLowerCase() === "active" && (
+            <BaseButton
+              variant="ghost"
+              className="text-red-600 hover:bg-red-50"
+              onClick={handleInactivar}
+              isLoading={inactivando}
+            >
+              <EyeOff className="h-4 w-4 mr-1.5" />
+              Inactivar sitio
+            </BaseButton>
+          )}
+          {String(statusRaw).toLowerCase() === "inactive" && (
+            <BaseButton
+              variant="ghost"
+              className="text-green-700 hover:bg-green-50"
+              onClick={handleActivar}
+              isLoading={activando}
+            >
+              <Eye className="h-4 w-4 mr-1.5" />
+              Activar sitio
+            </BaseButton>
+          )}
+          <BaseButton onClick={() => navigate("/user/nuevo-despliegue")}>
+            <UploadCloud className="h-4 w-4 mr-1.5" />
+            Actualizar sitio
+          </BaseButton>
+        </div>
       </div>
 
       {/* Info del despliegue */}

@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
-from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -193,13 +193,123 @@ def _track_site_visit_if_needed(*, request, domain: str, deployment: Deployment,
     log_request(request, 'SITE_VISIT', 200, user_id=deployment.user_id)
 
 
+def _site_not_found_response(domain: str) -> HttpResponse:
+    """Devuelve una página HTML amigable cuando un sitio no está disponible."""
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sitio no disponible – Vantard Software Studio</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }}
+    .card {{
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 1rem;
+      padding: 3rem 2.5rem;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    }}
+    .icon-wrap {{
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+    }}
+    .icon-wrap svg {{
+      width: 32px;
+      height: 32px;
+      color: #9ca3af;
+      stroke: #9ca3af;
+    }}
+    h1 {{
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 0.75rem;
+    }}
+    p {{
+      font-size: 0.9rem;
+      color: #6b7280;
+      line-height: 1.6;
+    }}
+    .domain {{
+      display: inline-block;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.8rem;
+      background: #f3f4f6;
+      color: #374151;
+      padding: 0.25rem 0.625rem;
+      border-radius: 0.375rem;
+      margin-top: 1rem;
+    }}
+    .brand {{
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: #d1d5db;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+           stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round"
+              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73
+                 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898
+                 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+      </svg>
+    </div>
+    <h1>Este sitio no está disponible</h1>
+    <p>El sitio web que buscas no se encuentra activo en este momento.<br />
+       Es posible que haya sido desactivado o aún no se haya publicado.</p>
+    <div class="domain">{domain}</div>
+    <p class="brand">Vantard Software Studio</p>
+  </div>
+</body>
+</html>"""
+    return HttpResponse(html, status=404, content_type='text/html; charset=utf-8')
+
+
 def serve_site_file(request, domain, file_path=DEFAULT_INDEX_FILE):
     """Sirve archivos estáticos del sitio desplegado en /media/sites/<domain>/.
 
     Solo expone deployments activos y protege contra path traversal.
+    Cuando el deployment no existe o no está activo, devuelve una página
+    HTML amigable en lugar del «Not Found» genérico del servidor.
     """
-    deployment = _get_active_deployment_for_domain(domain)
-    site_root = _get_site_root(domain)
+    deployment = Deployment.objects.filter(
+        domain=domain,
+        status=Deployment.StatusChoices.ACTIVE,
+        deleted_at__isnull=True,
+    ).first()
+
+    if not deployment:
+        return _site_not_found_response(domain)
+
+    try:
+        site_root = _get_site_root(domain)
+    except Http404:
+        return _site_not_found_response(domain)
+
     effective_root = _get_effective_site_root(site_root)
     entry_subdir = detect_site_entry_subdir(site_root)
 
