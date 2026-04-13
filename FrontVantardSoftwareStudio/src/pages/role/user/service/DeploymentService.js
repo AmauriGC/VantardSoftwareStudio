@@ -98,6 +98,19 @@ export default class DeploymentService {
     }
   }
 
+  static async activateDeployment(deploymentId) {
+    try {
+      const response = await axiosClient.put(ENDPOINTS.deployments.detail(deploymentId), {
+        status: "active",
+      });
+      const payload = response?.data?.data ?? {};
+      return { ok: true, data: payload };
+    } catch (error) {
+      const normalized = normalizeAxiosError(error);
+      return { ok: false, message: normalized.message };
+    }
+  }
+
   static async getTraffic(days = 7, deploymentId = null) {
     try {
       const response = await axiosClient.get(ENDPOINTS.deployments.traffic, {

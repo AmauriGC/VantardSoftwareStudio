@@ -1,4 +1,4 @@
-import { Globe, HardDrive, Activity, UploadCloud, ExternalLink, EyeOff } from "lucide-react";
+import { Globe, HardDrive, Activity, UploadCloud, ExternalLink, EyeOff, Eye } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import BaseCard from "../../../components/BaseCard";
@@ -89,6 +89,13 @@ export default function UserDespliegue() {
   const [tableTotal, setTableTotal] = useState(0);
   const TABLE_PAGE_SIZE = 10;
   const [inactivando, setInactivando] = useState(false);
+  const [activando, setActivando] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refrescar = () => {
+    setTablePage(1);
+    setRefreshKey((k) => k + 1);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -156,13 +163,13 @@ export default function UserDespliegue() {
     return () => {
       cancelled = true;
     };
-  }, [tablePage]);
+  }, [tablePage, refreshKey]);
 
   const handleInactivar = async () => {
     if (!miDespliegue) return;
     const confirmed = await confirmAction({
       title: "¿Inactivar el sitio?",
-      text: "El sitio dejará de estar disponible públicamente. Podrás volver a activarlo subiendo una nueva versión.",
+      text: "El sitio dejará de estar disponible públicamente. Puedes volver a activarlo desde esta misma pantalla.",
       confirmText: "Inactivar",
       cancelText: "Cancelar",
     });
@@ -178,7 +185,30 @@ export default function UserDespliegue() {
     }
 
     await showSuccessAlert({ title: "Sitio inactivado", text: "Tu sitio ya no está disponible públicamente." });
-    setTablePage(1);
+    refrescar();
+  };
+
+  const handleActivar = async () => {
+    if (!miDespliegue) return;
+    const confirmed = await confirmAction({
+      title: "¿Activar el sitio?",
+      text: "Tu sitio volverá a estar disponible públicamente.",
+      confirmText: "Activar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    setActivando(true);
+    const result = await DeploymentService.activateDeployment(miDespliegue.id);
+    setActivando(false);
+
+    if (!result.ok) {
+      showErrorAlert({ title: "Error", text: result.message || "No se pudo activar el despliegue." });
+      return;
+    }
+
+    await showSuccessAlert({ title: "Sitio activado", text: "Tu sitio ya está disponible públicamente." });
+    refrescar();
   };
 
   if (loading) {
@@ -282,6 +312,17 @@ export default function UserDespliegue() {
             >
               <EyeOff className="h-4 w-4 mr-1.5" />
               Inactivar sitio
+            </BaseButton>
+          )}
+          {String(statusRaw).toLowerCase() === "inactive" && (
+            <BaseButton
+              variant="ghost"
+              className="text-green-700 hover:bg-green-50"
+              onClick={handleActivar}
+              isLoading={activando}
+            >
+              <Eye className="h-4 w-4 mr-1.5" />
+              Activar sitio
             </BaseButton>
           )}
           <BaseButton onClick={() => navigate("/user/nuevo-despliegue")}>
