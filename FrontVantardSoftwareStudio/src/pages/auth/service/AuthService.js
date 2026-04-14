@@ -72,12 +72,15 @@ export default class AuthService {
     }
 
     try {
-      const response = await axiosClient.post(ENDPOINTS.auth.login, {
+      const ciphertext = await encryptPayload({
         email: normalizedEmail,
-        password,
+        password: normalizedPassword,
       });
 
-      const payload = response?.data?.data ?? {};
+      const response = await axiosClient.post(ENDPOINTS.auth.login, { ciphertext });
+      const decrypted = await decryptPayload(response?.data?.ciphertext);
+
+      const payload = decrypted?.data ?? {};
       const user = payload?.user ?? {};
       const role = normalizeRole(user?.role_name, user?.email ?? normalizedEmail);
 
@@ -92,6 +95,19 @@ export default class AuthService {
         },
       };
     } catch (error) {
+      const encryptedCiphertext = error?.response?.data?.ciphertext;
+      if (encryptedCiphertext) {
+        try {
+          const decryptedError = await decryptPayload(encryptedCiphertext);
+          return {
+            ok: false,
+            message: decryptedError?.message || "No se pudo iniciar sesión.",
+          };
+        } catch {
+          // fallback
+        }
+      }
+
       const normalized = normalizeAxiosError(error);
       return { ok: false, message: normalized.message };
     }
