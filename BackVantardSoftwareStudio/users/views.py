@@ -135,10 +135,30 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'auth_login'
+    renderer_classes = [AESRenderer]
 
     def post(self, request):
         ip_address = _get_client_ip(request)
-        serializer = UserLoginSerializer(data=request.data)
+        ciphertext = request.data.get('ciphertext')
+        if not ciphertext:
+            log_request(request, 'USER_LOGIN_FAILED', 400)
+            return error_response(
+                message='Se esperaba un payload cifrado.',
+                status=400,
+            )
+
+        try:
+            decrypted = decrypt_payload(ciphertext)
+        except Exception:
+            logger.exception('Error al descifrar payload de login | ip={}', ip_address)
+            security_logger.warning('Payload de login inválido o corrupto | ip={}', ip_address)
+            log_request(request, 'USER_LOGIN_FAILED', 400)
+            return error_response(
+                message='No se pudo descifrar el payload.',
+                status=400,
+            )
+
+        serializer = UserLoginSerializer(data=decrypted)
         if not serializer.is_valid():
             log_request(request, 'USER_LOGIN_FAILED', 400)
             return error_response(
