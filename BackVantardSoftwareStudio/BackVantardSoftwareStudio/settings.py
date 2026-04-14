@@ -124,7 +124,8 @@ INSTALLED_APPS = [
     'deployments',
     'user_plans',
     'plan_change_request',
-    'roles'
+    'roles',
+    'anymail',
 ]
 
 MIDDLEWARE = [
@@ -252,15 +253,11 @@ DEPLOYMENT_BASE_URL = config('DEPLOYMENT_BASE_URL', default='http://localhost:80
 PASSWORD_RESET_TIMEOUT = config('PASSWORD_RESET_TIMEOUT', default=3600, cast=int)
 FRONTEND_URL      = config('FRONTEND_URL', default='http://localhost:5173')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='vantardsoftwarestudio@gmail.com')
-EMAIL_BACKEND     = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST        = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT        = config('EMAIL_PORT', default=465, cast=int)
-# EMAIL_USE_TLS y EMAIL_USE_SSL son mutuamente excluyentes en Django.
-# Puerto 587 → TLS=True, SSL=False | Puerto 465 → TLS=False, SSL=True
-EMAIL_USE_TLS     = config('EMAIL_USE_TLS', default=False, cast=bool)
-EMAIL_USE_SSL     = config('EMAIL_USE_SSL', default=True, cast=bool)
-EMAIL_HOST_USER   = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_BACKEND     = config('EMAIL_BACKEND', default='anymail.backends.resend.EmailBackend')
+
+ANYMAIL = {
+    'RESEND_API_KEY': config('RESEND_API_KEY', default=''),
+}
 
 # ---------------------------------------------------------------------------
 # Cifrado AES-256-CBC — endpoint password-reset/confirm
