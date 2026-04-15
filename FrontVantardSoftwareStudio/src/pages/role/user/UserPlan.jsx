@@ -67,7 +67,13 @@ export default function UserPlan() {
     const price = planSeleccionado.price || planSeleccionado.precio || 0;
     if (price > 0) {
       const validMeses = mesField.validate();
-      if (!validMeses) return;
+      if (!validMeses) {
+        showErrorAlert({
+          title: "Número de meses inválido",
+          text: "El número de meses debe ser un entero entre 1 y 12.",
+        });
+        return;
+      }
     }
 
     setIsSubmitting(true);

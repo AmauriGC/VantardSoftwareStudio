@@ -29,7 +29,11 @@ export default class AdminPlanService {
       return { ok: true, data };
     } catch (error) {
       const normalized = normalizeAxiosError(error);
-      return { ok: false, message: normalized.message };
+      return {
+        ok: false,
+        message: normalized.message,
+        errorData: normalized.data?.data ?? null,
+      };
     }
   }
 }

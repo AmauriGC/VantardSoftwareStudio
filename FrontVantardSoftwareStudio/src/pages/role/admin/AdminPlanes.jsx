@@ -216,16 +216,28 @@ export default function AdminPlanes() {
           title: "Planes actualizados",
           text: "Los cambios fueron guardados correctamente.",
         });
-      } else if (failures.length === cambios.length) {
-        showErrorAlert({
-          title: "Error",
-          text: failures[0]?.message || "No se pudieron actualizar los planes.",
-        });
       } else {
-        showErrorAlert({
-          title: "Actualización parcial",
-          text: "Algunos planes no se pudieron actualizar.",
+        const allErrors = [];
+        failures.forEach((f) => {
+          if (f.errorData && typeof f.errorData === "object" && !Array.isArray(f.errorData)) {
+            Object.values(f.errorData).forEach((msgs) => {
+              if (Array.isArray(msgs)) msgs.forEach((m) => allErrors.push(String(m)));
+              else allErrors.push(String(msgs));
+            });
+          } else if (f.message) {
+            allErrors.push(f.message);
+          }
         });
+
+        const uniqueErrors = [...new Set(allErrors)];
+        const title =
+          failures.length === cambios.length ? "Error al guardar" : "Actualización parcial";
+        const text =
+          uniqueErrors.length > 0
+            ? uniqueErrors.join("\n")
+            : "No se pudieron actualizar los planes.";
+
+        showErrorAlert({ title, text });
       }
 
       const reload = await AdminPlanService.listPlans();
