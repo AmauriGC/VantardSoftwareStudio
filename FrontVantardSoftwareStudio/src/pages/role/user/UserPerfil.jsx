@@ -39,6 +39,9 @@ export default function UserPerfil() {
     [newPasswordField.value]
   );
 
+  const resetNombre = nombreField.reset;
+  const resetApellido = apellidoField.reset;
+
   const iniciales = useMemo(() => {
     const first = (profile?.first_name ?? "").trim().charAt(0);
     const last = (profile?.last_name ?? "").trim().charAt(0);
@@ -60,13 +63,13 @@ export default function UserPerfil() {
 
       const nextProfile = result.data;
       setProfile(nextProfile);
-      nombreField.reset(nextProfile?.first_name ?? "");
-      apellidoField.reset(nextProfile?.last_name ?? "");
+      resetNombre(nextProfile?.first_name ?? "");
+      resetApellido(nextProfile?.last_name ?? "");
       setIsLoading(false);
     };
 
     loadProfile();
-  }, []);
+  }, [resetNombre, resetApellido]);
 
   const handleGuardar = async () => {
     if (isProfileSubmitting) return;
