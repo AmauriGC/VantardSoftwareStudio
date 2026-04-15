@@ -3,7 +3,6 @@ import { Save, RefreshCcw } from "lucide-react";
 
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
-import { planes as planesMock, usuarios } from "../../../data/mockData";
 import { showSuccessAlert, showErrorAlert, confirmAction } from "../../../kernel/alerts";
 import AdminPlanService from "./service/AdminPlanService";
 import AdminPlanChangeRequestService from "./service/AdminPlanChangeRequestService";
@@ -15,22 +14,12 @@ const ESTADO_SOLICITUD_CLASES = {
 };
 
 function getNombreUsuario(userId) {
-  const u = usuarios.find((x) => x.id === userId);
-  return u ? `${u.nombre} ${u.apellido}` : userId;
+  return userId;
 }
 
 export default function AdminPlanes() {
-  const [planes, setPlanes] = useState(planesMock);
-  const [borradores, setBorradores] = useState(() => (
-    planesMock.reduce((acc, p) => {
-      acc[p.id] = {
-        precio: String(p.precio),
-        discoMaxMB: String(p.discoMaxMB),
-        habilitado: p.habilitado,
-      };
-      return acc;
-    }, {})
-  ));
+  const [planes, setPlanes] = useState([]);
+  const [borradores, setBorradores] = useState({});
   const [solicitudes, setSolicitudes] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingPlanes, setIsLoadingPlanes] = useState(true);

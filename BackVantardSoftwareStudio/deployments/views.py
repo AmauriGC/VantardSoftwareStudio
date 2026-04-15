@@ -499,11 +499,11 @@ class DeploymentDetailView(APIView):
             return None
 
     def _resolve_for_mutation(self, pk, user):
-        “””Resuelve el deployment para operaciones de escritura (PUT/DELETE).
+        """Resuelve el deployment para operaciones de escritura (PUT/DELETE).
 
         Distingue entre recurso inexistente (404) y acceso no autorizado (403)
-        para prevenir IDOR sin revelar la existencia del recurso al dueño correcto.
-        “””
+        para prevenir IDOR sin revelar la existencia del recurso al dueno correcto.
+        """
         try:
             deployment = Deployment.objects.get(pk=pk, deleted_at__isnull=True)
         except Deployment.DoesNotExist:
@@ -565,7 +565,7 @@ class DeploymentDetailView(APIView):
         if err:
             return err
 
-        # Regla de negocio: no existe “eliminar”; solo inactivar.
+        # Regla de negocio: no existe "eliminar"; solo inactivar.
         if deployment.status != Deployment.StatusChoices.INACTIVE:
             deployment.status = Deployment.StatusChoices.INACTIVE
             deployment.save(update_fields=['status', 'updated_at'])
