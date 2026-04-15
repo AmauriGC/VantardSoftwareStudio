@@ -5,13 +5,14 @@ import { useNavigate } from "react-router-dom";
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 import DeploymentService from "./service/DeploymentService";
 import UserService from "./service/UserService";
 
 export default function UserNuevoDespliegue() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
-  const [dominio, setDominio] = useState("");
+  const dominioField = useValidatedField("", VALIDATION_GROUPS.deploymentDomain);
   const [archivo, setArchivo] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,16 +54,15 @@ export default function UserNuevoDespliegue() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    const normalizedDomain = dominio.trim().toLowerCase();
+    const domainValid = dominioField.validate();
+    if (!domainValid) return;
 
-    if (!dominio.trim()) {
-      showErrorAlert({ title: "Falta el dominio", text: "Ingresa un nombre para tu sitio." });
-      return;
-    }
     if (!archivo) {
       showErrorAlert({ title: "Falta el archivo", text: "Selecciona un archivo .zip con tu sitio." });
       return;
     }
+
+    const normalizedDomain = dominioField.value;
 
     setIsSubmitting(true);
 
@@ -131,19 +131,26 @@ export default function UserNuevoDespliegue() {
                   id="dominio-input"
                   type="text"
                   placeholder="mi-sitio"
-                  value={dominio}
-                  onChange={(e) =>
-                    setDominio(e.target.value.replaceAll(/[^a-z0-9-]/gi, "").toLowerCase())
-                  }
-                  className="h-11 flex-1 rounded-l-md border border-r-0 border-gray-200 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/30 hover:border-gray-300 transition-colors"
+                  value={dominioField.value}
+                  onChange={dominioField.onChange}
+                  onBlur={dominioField.onBlur}
+                  className={`h-11 flex-1 rounded-l-md border border-r-0 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus-visible:ring-2 hover:border-gray-300 transition-colors ${
+                    dominioField.error
+                      ? "border-red-400 focus-visible:ring-red-400/30"
+                      : "border-gray-200 focus-visible:ring-blue-600/30"
+                  }`}
                 />
                 <span className="h-11 flex items-center px-3 rounded-r-md border border-gray-200 bg-gray-50 text-sm text-gray-500 shrink-0">
                   .vss.app
                 </span>
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                Solo letras minúsculas, números y guiones.
-              </p>
+              {dominioField.error ? (
+                <p className="text-xs text-red-600 mt-1">{dominioField.error}</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">
+                  Solo letras minúsculas, números y guiones.
+                </p>
+              )}
             </div>
           </div>
         </BaseCard>

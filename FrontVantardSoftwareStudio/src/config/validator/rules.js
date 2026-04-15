@@ -156,6 +156,68 @@ export function personNameFormat(
   };
 }
 
+export function isInteger(message = "Debe ser un número entero.") {
+  return {
+    name: "isInteger",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true;
+      return Number.isInteger(Number(v)) && !v.includes(".");
+    },
+  };
+}
+
+export function isFiniteNumber(message = "Debe ser un número válido.") {
+  return {
+    name: "isFiniteNumber",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true;
+      return Number.isFinite(Number(v));
+    },
+  };
+}
+
+export function min(n, message = `El valor mínimo es ${n}.`) {
+  return {
+    name: "min",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true;
+      return Number(v) >= n;
+    },
+  };
+}
+
+export function max(n, message = `El valor máximo es ${n}.`) {
+  return {
+    name: "max",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true;
+      return Number(v) <= n;
+    },
+  };
+}
+
+export function domainFormat(
+  message = "Solo letras minúsculas, números y guiones. Mínimo 3 caracteres, sin guion al inicio ni al final."
+) {
+  return {
+    name: "domainFormat",
+    message,
+    validate: (value) => {
+      const v = String(value ?? "").trim();
+      if (!v) return true;
+      return v.length >= 3 && /^[a-z0-9]/.test(v) && /[a-z0-9]$/.test(v);
+    },
+  };
+}
+
 export function validateField(rawValue, group, context, phase = "change") {
   const transforms = group?.transforms ?? [];
   const validators = group?.validators ?? [];
@@ -254,6 +316,42 @@ export const VALIDATION_GROUPS = {
     validators: [
       required("El apellido es obligatorio."),
       personNameFormat(),
+    ],
+  }),
+
+  deploymentDomain: createGroup({
+    transforms: [(v) => String(v ?? "").replace(/[^a-z0-9-]/g, "").toLowerCase()],
+    validators: [
+      required("El nombre del dominio es obligatorio."),
+      domainFormat(),
+    ],
+  }),
+
+  planMonths: createGroup({
+    transforms: [trim],
+    validators: [
+      required("El número de meses es obligatorio."),
+      isInteger("Debe ser un número entero."),
+      min(1, "El mínimo es 1 mes."),
+      max(12, "El máximo es 12 meses."),
+    ],
+  }),
+
+  planPrice: createGroup({
+    transforms: [trim],
+    validators: [
+      required("El precio es obligatorio."),
+      isFiniteNumber("Debe ser un número válido."),
+      min(0, "El precio no puede ser negativo."),
+    ],
+  }),
+
+  planDiskMB: createGroup({
+    transforms: [trim],
+    validators: [
+      required("El tamaño de disco es obligatorio."),
+      isInteger("Debe ser un número entero."),
+      min(1, "El disco mínimo es 1 MB."),
     ],
   }),
 };

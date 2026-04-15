@@ -135,6 +135,17 @@ export default function AdminUsuarios() {
         return;
       }
 
+      const confirmed = await confirmAction({
+        title: modal === "crear" ? "Crear usuario" : "Actualizar usuario",
+        text:
+          modal === "crear"
+            ? `¿Confirmas crear al usuario ${nombreField.value} ${apellidoField.value}?`
+            : `¿Confirmas actualizar los datos de ${nombreField.value} ${apellidoField.value}?`,
+        confirmText: modal === "crear" ? "Crear" : "Guardar",
+        cancelText: "Cancelar",
+      });
+      if (!confirmed) return;
+
       if (modal === "crear") {
         const result = await AdminUserService.createUser({
           nombre: nombreField.value,

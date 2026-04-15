@@ -3,7 +3,7 @@ from rest_framework.permissions import BasePermission
 
 class IsAdminUser(BasePermission):
 
-    message = 'No tienes permiso para acceder a los logs del sistema.'
+    message = 'Acceso denegado'
 
     def has_permission(self, request, view):
         user = getattr(request, "user", None)

@@ -4,7 +4,7 @@ from rest_framework.permissions import BasePermission
 class IsAdminUser(BasePermission):
     """Permite acceso solo a usuarios con rol Admin."""
 
-    message = 'No tienes permiso para realizar esta acción.'
+    message = 'No tienes permiso para acceder a este recurso.'
 
     def has_permission(self, request, view):
         return bool(

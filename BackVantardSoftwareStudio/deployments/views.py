@@ -498,6 +498,23 @@ class DeploymentDetailView(APIView):
         except Deployment.DoesNotExist:
             return None
 
+    def _resolve_for_mutation(self, pk, user):
+        “””Resuelve el deployment para operaciones de escritura (PUT/DELETE).
+
+        Distingue entre recurso inexistente (404) y acceso no autorizado (403)
+        para prevenir IDOR sin revelar la existencia del recurso al dueño correcto.
+        “””
+        try:
+            deployment = Deployment.objects.get(pk=pk, deleted_at__isnull=True)
+        except Deployment.DoesNotExist:
+            return None, error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
+        if deployment.user_id != user.pk:
+            return None, error_response(
+                message='No tienes permiso para modificar/eliminar este sitio.',
+                status=403,
+            )
+        return deployment, None
+
     def get(self, request, pk):
         deployment = self._get_deployment(pk, request.user)
         if not deployment:
@@ -510,9 +527,9 @@ class DeploymentDetailView(APIView):
         )
 
     def put(self, request, pk):
-        deployment = self._get_deployment(pk, request.user)
-        if not deployment:
-            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
+        deployment, err = self._resolve_for_mutation(pk, request.user)
+        if err:
+            return err
 
         serializer = DeploymentUpdateSerializer(
             data=request.data,
@@ -544,9 +561,9 @@ class DeploymentDetailView(APIView):
         )
 
     def delete(self, request, pk):
-        deployment = self._get_deployment(pk, request.user)
-        if not deployment:
-            return error_response(message=DEPLOYMENT_NOT_FOUND, status=404)
+        deployment, err = self._resolve_for_mutation(pk, request.user)
+        if err:
+            return err
 
         # Regla de negocio: no existe “eliminar”; solo inactivar.
         if deployment.status != Deployment.StatusChoices.INACTIVE:

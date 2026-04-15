@@ -182,7 +182,7 @@ class LoginView(APIView):
             )
             log_request(request, 'USER_LOGIN_FAILED', 401)
             return error_response(
-                message='Credenciales incorrectas.',
+                message='Correo o contraseña incorrectos.',
                 status=401,
             )
 

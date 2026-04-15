@@ -5,14 +5,17 @@ import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import BaseModal from "../../../components/BaseModal";
 import BaseInput from "../../../components/BaseInput";
-import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import { showSuccessAlert, showErrorAlert, confirmAction } from "../../../kernel/alerts";
+import { useValidatedField, VALIDATION_GROUPS } from "../../../config/validator";
 import UserService from "./service/UserService";
 
 export default function UserPlan() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [planSeleccionado, setPlanSeleccionado] = useState(null);
-  const [meses, setMeses] = useState("1");
+  const mesField = useValidatedField("1", VALIDATION_GROUPS.planMonths);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancellingId, setIsCancellingId] = useState(null);
+  const [isApplyingId, setIsApplyingId] = useState(null);
   const [profile, setProfile] = useState(null);
   const [planes, setPlanes] = useState([]);
   const [misSolicitudes, setMisSolicitudes] = useState([]);
@@ -54,18 +57,24 @@ export default function UserPlan() {
 
   const abrirModal = (plan) => {
     setPlanSeleccionado(plan);
-    setMeses("1");
+    mesField.reset("1");
     setModalAbierto(true);
   };
 
   const handleSolicitar = async () => {
-    if (!planSeleccionado || !meses) return;
-    
+    if (!planSeleccionado) return;
+
+    const price = planSeleccionado.price || planSeleccionado.precio || 0;
+    if (price > 0) {
+      const validMeses = mesField.validate();
+      if (!validMeses) return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await UserService.requestPlanChange({
         plan_id: planSeleccionado.id,
-        months: Number.parseInt(meses, 10),
+        months: price > 0 ? Number.parseInt(mesField.value, 10) : 1,
       });
 
       if (result.ok) {
@@ -97,8 +106,8 @@ export default function UserPlan() {
   };
 
   const totalEstimado =
-    planSeleccionado && meses
-      ? (planSeleccionado.price || planSeleccionado.precio) * Number.parseInt(meses || "1", 10)
+    planSeleccionado && mesField.value
+      ? (planSeleccionado.price || planSeleccionado.precio || 0) * (Number.parseInt(mesField.value, 10) || 1)
       : 0;
 
   const ESTADO_CLASES = {
@@ -295,13 +304,23 @@ export default function UserPlan() {
                         <BaseButton
                           variant="secondary"
                           className="h-7 px-2.5 text-xs"
+                          disabled={isCancellingId === s.id || isApplyingId !== null}
+                          isLoading={isCancellingId === s.id}
                           onClick={async () => {
+                            const confirmed = await confirmAction({
+                              title: "Cancelar solicitud",
+                              text: "¿Deseas cancelar esta solicitud de cambio de plan?",
+                              confirmText: "Sí, cancelar",
+                              cancelText: "No",
+                            });
+                            if (!confirmed) return;
+
+                            setIsCancellingId(s.id);
                             const result = await UserService.cancelPlanRequest(s.id);
+                            setIsCancellingId(null);
                             if (result.ok) {
                               const refreshed = await UserService.getPlanRequests();
-                              if (refreshed.ok) {
-                                setMisSolicitudes(refreshed.data);
-                              }
+                              if (refreshed.ok) setMisSolicitudes(refreshed.data);
                               showSuccessAlert({
                                 title: "Solicitud cancelada",
                                 text: "La solicitud fue cancelada correctamente.",
@@ -320,8 +339,20 @@ export default function UserPlan() {
                       {s.estado === "Aprobado" && (
                         <BaseButton
                           className="h-7 px-2.5 text-xs"
+                          disabled={isApplyingId === s.id || isCancellingId !== null}
+                          isLoading={isApplyingId === s.id}
                           onClick={async () => {
+                            const confirmed = await confirmAction({
+                              title: "Aplicar plan",
+                              text: "¿Deseas aplicar este cambio de plan ahora?",
+                              confirmText: "Sí, aplicar",
+                              cancelText: "Cancelar",
+                            });
+                            if (!confirmed) return;
+
+                            setIsApplyingId(s.id);
                             const result = await UserService.applyPlanRequest(s.id);
+                            setIsApplyingId(null);
                             if (result.ok) {
                               const [refProfile, refPlans, refRequests] = await Promise.all([
                                 UserService.getProfile(),
@@ -388,8 +419,10 @@ export default function UserPlan() {
               id="meses"
               label="Número de meses"
               type="number"
-              value={meses}
-              onChange={(e) => setMeses(e.target.value)}
+              value={mesField.value}
+              onChange={mesField.onChange}
+              onBlur={mesField.onBlur}
+              error={mesField.error}
             />
           )}
           {(planSeleccionado?.price || planSeleccionado?.precio) > 0 && (

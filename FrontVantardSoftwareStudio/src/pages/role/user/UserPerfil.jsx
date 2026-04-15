@@ -12,14 +12,6 @@ import { clearAuth, getAuth } from "../../auth/store/authStore";
 import { buildPasswordChecklist } from "../../../utils/formatters";
 import UserService from "./service/UserService";
 
-const NAME_PATTERN = /^[\p{L}\s'-]+$/u;
-
-function sanitizeNameInput(value) {
-  return String(value ?? "")
-    .replaceAll(/[^\p{L}\s]/gu, "")
-    .replaceAll(/\s{2,}/g, " ");
-}
-
 export default function UserPerfil() {
   const navigate = useNavigate();
 
@@ -30,8 +22,8 @@ export default function UserPerfil() {
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isDeleteSubmitting, setIsDeleteSubmitting] = useState(false);
   const [profile, setProfile] = useState(null);
-  const [nombre, setNombre] = useState("");
-  const [apellido, setApellido] = useState("");
+  const nombreField = useValidatedField("", VALIDATION_GROUPS.adminUserFirstName);
+  const apellidoField = useValidatedField("", VALIDATION_GROUPS.adminUserLastName);
   const currentPasswordField = useValidatedField("", VALIDATION_GROUPS.loginPassword);
   const newPasswordField = useValidatedField("", VALIDATION_GROUPS.registerPassword);
   const confirmPasswordField = useValidatedField(
@@ -68,8 +60,8 @@ export default function UserPerfil() {
 
       const nextProfile = result.data;
       setProfile(nextProfile);
-      setNombre(nextProfile?.first_name ?? "");
-      setApellido(nextProfile?.last_name ?? "");
+      nombreField.reset(nextProfile?.first_name ?? "");
+      apellidoField.reset(nextProfile?.last_name ?? "");
       setIsLoading(false);
     };
 
@@ -78,26 +70,15 @@ export default function UserPerfil() {
 
   const handleGuardar = async () => {
     if (isProfileSubmitting) return;
-    if (!nombre.trim() || !apellido.trim()) {
-      showErrorAlert({
-        title: "Datos incompletos",
-        text: "Nombre y apellido son obligatorios.",
-      });
-      return;
-    }
 
-    if (!NAME_PATTERN.test(nombre.trim()) || !NAME_PATTERN.test(apellido.trim())) {
-      showErrorAlert({
-        title: "Nombre inválido",
-        text: "Nombre y apellido solo permiten letras, espacios, apóstrofe y guion.",
-      });
-      return;
-    }
+    const okNombre = nombreField.validate();
+    const okApellido = apellidoField.validate();
+    if (!okNombre || !okApellido) return;
 
     setIsProfileSubmitting(true);
     const result = await UserService.updateProfile({
-      first_name: nombre.trim(),
-      last_name: apellido.trim(),
+      first_name: nombreField.value,
+      last_name: apellidoField.value,
     });
 
     if (!result.ok) {
@@ -110,8 +91,8 @@ export default function UserPerfil() {
     }
 
     setProfile(result.data);
-    setNombre(result.data?.first_name ?? "");
-    setApellido(result.data?.last_name ?? "");
+    nombreField.reset(result.data?.first_name ?? "");
+    apellidoField.reset(result.data?.last_name ?? "");
     setModalAbierto(false);
     setIsProfileSubmitting(false);
     showSuccessAlert({ title: "Perfil actualizado", text: "Tus datos se guardaron correctamente." });
@@ -218,7 +199,14 @@ export default function UserPerfil() {
               <p className="text-sm text-gray-500">{profile?.email}</p>
             </div>
           </div>
-          <BaseButton variant="secondary" onClick={() => setModalAbierto(true)}>
+          <BaseButton
+            variant="secondary"
+            onClick={() => {
+              nombreField.reset(profile?.first_name ?? "");
+              apellidoField.reset(profile?.last_name ?? "");
+              setModalAbierto(true);
+            }}
+          >
             <Pencil className="h-4 w-4 mr-1.5" />
             Editar
           </BaseButton>
@@ -300,14 +288,18 @@ export default function UserPerfil() {
             <BaseInput
               id="edit-nombre"
               label="Nombre"
-              value={nombre}
-              onChange={(e) => setNombre(sanitizeNameInput(e.target.value))}
+              value={nombreField.value}
+              onChange={nombreField.onChange}
+              onBlur={nombreField.onBlur}
+              error={nombreField.error}
             />
             <BaseInput
               id="edit-apellido"
               label="Apellido"
-              value={apellido}
-              onChange={(e) => setApellido(sanitizeNameInput(e.target.value))}
+              value={apellidoField.value}
+              onChange={apellidoField.onChange}
+              onBlur={apellidoField.onBlur}
+              error={apellidoField.error}
             />
           </div>
           <BaseInput id="edit-email" label="Correo electrónico" type="email" value={profile?.email || ""} disabled />

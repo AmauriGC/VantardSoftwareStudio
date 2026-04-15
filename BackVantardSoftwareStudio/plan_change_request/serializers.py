@@ -10,7 +10,14 @@ from user_plans.models import UserPlan
 
 class CreatePlanChangeRequestSerializer(serializers.Serializer):
     requested_plan_id = serializers.IntegerField()
-    months            = serializers.IntegerField(min_value=1, max_value=24)
+    months            = serializers.IntegerField(
+        min_value=1,
+        max_value=12,
+        error_messages={
+            'min_value': 'Asegúrese de que este valor es mayor o igual a 1',
+            'max_value': 'Asegúrese de que este valor es menor o igual a 12',
+        },
+    )
     reason            = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
 
     def validate(self, attrs):
@@ -42,11 +49,27 @@ class CreatePlanChangeRequestSerializer(serializers.Serializer):
                 deleted_at__isnull=True,
             )
         except Plan.DoesNotExist:
-            raise serializers.ValidationError('El plan solicitado no existe o no está disponible.')
+            raise serializers.ValidationError('El plan seleccionado no existe')
 
         months = attrs.get('months')
         if months is None:
             raise serializers.ValidationError('Debes indicar el número de meses.')
+
+        # Validación de almacenamiento: bloquear si el uso actual supera el límite del nuevo plan.
+        from django.db.models import Sum
+        from deployments.models import Deployment
+        used_disk_mb = (
+            Deployment.objects.filter(
+                user=user,
+                deleted_at__isnull=True,
+            ).aggregate(total=Sum('disk_used_mb'))['total'] or 0
+        )
+        if used_disk_mb > plan.max_disk_mb:
+            raise serializers.ValidationError(
+                f'No puedes cambiar a este plan: tienes {used_disk_mb} MB en uso '
+                f'y el plan "{plan.name}" solo permite {plan.max_disk_mb} MB. '
+                f'Libera espacio o elige un plan con mayor almacenamiento.'
+            )
 
         total = UserPlan.calculate_total(float(plan.price), int(months))
 

@@ -4,7 +4,7 @@ import { Save, RefreshCcw } from "lucide-react";
 import BaseCard from "../../../components/BaseCard";
 import BaseButton from "../../../components/BaseButton";
 import { planes as planesMock, usuarios } from "../../../data/mockData";
-import { showSuccessAlert, showErrorAlert } from "../../../kernel/alerts";
+import { showSuccessAlert, showErrorAlert, confirmAction } from "../../../kernel/alerts";
 import AdminPlanService from "./service/AdminPlanService";
 import AdminPlanChangeRequestService from "./service/AdminPlanChangeRequestService";
 
@@ -35,7 +35,7 @@ export default function AdminPlanes() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingPlanes, setIsLoadingPlanes] = useState(true);
   const [isLoadingSolicitudes, setIsLoadingSolicitudes] = useState(true);
-  const [isUpdatingSolicitud, setIsUpdatingSolicitud] = useState(false);
+  const [actioningSolicitudId, setActioningSolicitudId] = useState(null);
 
   useEffect(() => {
     const cargarPlanes = async () => {
@@ -188,6 +188,32 @@ export default function AdminPlanes() {
       return;
     }
 
+    // Validación de campos antes de confirmar
+    for (const cambio of cambios) {
+      if (!Number.isFinite(cambio.payload.price) || cambio.payload.price < 0) {
+        showErrorAlert({
+          title: "Precio inválido",
+          text: "El precio debe ser un número válido mayor o igual a 0.",
+        });
+        return;
+      }
+      if (!Number.isInteger(cambio.payload.max_disk_mb) || cambio.payload.max_disk_mb < 1) {
+        showErrorAlert({
+          title: "Disco inválido",
+          text: "El tamaño de disco debe ser un número entero mayor a 0.",
+        });
+        return;
+      }
+    }
+
+    const confirmed = await confirmAction({
+      title: "Guardar cambios",
+      text: `¿Confirmas guardar los cambios en ${cambios.length} plan${cambios.length > 1 ? "es" : ""}?`,
+      confirmText: "Guardar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
     setIsSaving(true);
     try {
       const results = await Promise.all(
@@ -268,9 +294,17 @@ export default function AdminPlanes() {
   };
 
   const handleAprobar = async (id) => {
-    if (isUpdatingSolicitud) return;
+    if (actioningSolicitudId !== null) return;
 
-    setIsUpdatingSolicitud(true);
+    const confirmed = await confirmAction({
+      title: "Aprobar solicitud",
+      text: "¿Confirmas aprobar esta solicitud de cambio de plan?",
+      confirmText: "Sí, aprobar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    setActioningSolicitudId(`${id}_aprobar`);
     try {
       const result = await AdminPlanChangeRequestService.approve(id);
       if (!result.ok) {
@@ -283,7 +317,7 @@ export default function AdminPlanes() {
 
       showSuccessAlert({
         title: "Solicitud aprobada",
-        text: "La solicitud fue aprobada y el plan actualizado correctamente.",
+        text: "La solicitud fue aprobada correctamente.",
       });
 
       await cargarSolicitudes();
@@ -294,14 +328,22 @@ export default function AdminPlanes() {
         text: "Ocurrió un error al aprobar la solicitud.",
       });
     } finally {
-      setIsUpdatingSolicitud(false);
+      setActioningSolicitudId(null);
     }
   };
 
   const handleRechazar = async (id) => {
-    if (isUpdatingSolicitud) return;
+    if (actioningSolicitudId !== null) return;
 
-    setIsUpdatingSolicitud(true);
+    const confirmed = await confirmAction({
+      title: "Rechazar solicitud",
+      text: "¿Confirmas rechazar esta solicitud de cambio de plan?",
+      confirmText: "Sí, rechazar",
+      cancelText: "Cancelar",
+    });
+    if (!confirmed) return;
+
+    setActioningSolicitudId(`${id}_rechazar`);
     try {
       const result = await AdminPlanChangeRequestService.reject(id);
       if (!result.ok) {
@@ -325,7 +367,7 @@ export default function AdminPlanes() {
         text: "Ocurrió un error al rechazar la solicitud.",
       });
     } finally {
-      setIsUpdatingSolicitud(false);
+      setActioningSolicitudId(null);
     }
   };
 
@@ -443,7 +485,8 @@ export default function AdminPlanes() {
             <div className="flex items-center justify-end gap-2">
               <BaseButton
                 className="h-7 px-2.5 text-xs"
-                disabled={!puedeActuar || isUpdatingSolicitud}
+                disabled={!puedeActuar || actioningSolicitudId !== null}
+                isLoading={actioningSolicitudId === `${s.id}_aprobar`}
                 onClick={() => handleAprobar(s.id)}
               >
                 Aprobar
@@ -451,7 +494,8 @@ export default function AdminPlanes() {
               <BaseButton
                 variant="secondary"
                 className="h-7 px-2.5 text-xs"
-                disabled={!puedeActuar || isUpdatingSolicitud}
+                disabled={!puedeActuar || actioningSolicitudId !== null}
+                isLoading={actioningSolicitudId === `${s.id}_rechazar`}
                 onClick={() => handleRechazar(s.id)}
               >
                 Rechazar

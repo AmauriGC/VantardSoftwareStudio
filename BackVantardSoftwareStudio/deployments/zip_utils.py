@@ -91,7 +91,7 @@ def validate_zip(zip_file, max_disk_mb: int) -> dict:
     zip_file.seek(0)
     if not zipfile.is_zipfile(zip_file):
         logger.warning('Archivo no es ZIP válido o está corrupto.')
-        raise ZipValidationError('El archivo no es un ZIP válido o está dañado.')
+        raise ZipValidationError('El archivo no es un ZIP válido')
 
     zip_file.seek(0)
     with zipfile.ZipFile(zip_file, 'r') as zf:
