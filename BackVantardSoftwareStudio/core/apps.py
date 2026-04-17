@@ -38,16 +38,12 @@ def _setup_db_user():
         return
 
     sql_text = sql_path.read_text(encoding="utf-8")
-    statements = [
-        stmt.strip()
-        for line in sql_text.splitlines()
-        if (line := line.strip()) and not line.startswith("--")
-        for stmt in [line]
-        if stmt
+    lines = [
+        l.strip()
+        for l in sql_text.splitlines()
+        if l.strip() and not l.strip().startswith("--")
     ]
-    # Re-join en bloques separados por ";"
-    full_sql = " ".join(statements)
-    raw_stmts = [s.strip() for s in full_sql.split(";") if s.strip()]
+    raw_stmts = [s.strip() for s in " ".join(lines).split(";") if s.strip()]
 
     with connection.cursor() as cursor:
         for stmt in raw_stmts:
