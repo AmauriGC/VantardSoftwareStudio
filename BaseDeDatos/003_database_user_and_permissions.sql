@@ -1,17 +1,16 @@
 -- Crear usuario de aplicación (NO usar root)
-CREATE USER '<DB_USER>'@'localhost'
-IDENTIFIED BY '<STRONG_PASSWORD>';
+CREATE USER IF NOT EXISTS 'vss'@'%' IDENTIFIED BY 'vantardsoftwarestudio2102.';
 
 -- Permisos mínimos necesarios (principio de menor privilegio)
-GRANT SELECT, INSERT, UPDATE
-ON vss.*
-TO '<DB_USER>'@'localhost';
+GRANT ALL PRIVILEGES ON railway.* TO 'vss'@'%';
 
 -- Aplicar cambios
 FLUSH PRIVILEGES;
 
--- IMPORTANTE:
--- 1. NO usar '%' como host en producción (riesgo de seguridad)
--- 2. Usar una contraseña fuerte (mínimo 12 caracteres, con símbolos)
--- 3. NO otorgar permisos como DROP, ALTER o GRANT si no son necesarios
--- 4. Este usuario es solo para la aplicación, NO para administración
+-- Seguridad final
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'vss'@'%';
+
+GRANT SELECT, INSERT, UPDATE, DELETE, TRIGGER, EVENT
+ON railway.* TO 'vss'@'%';
+
+FLUSH PRIVILEGES;
