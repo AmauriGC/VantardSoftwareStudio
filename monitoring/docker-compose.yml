@@ -1,0 +1,35 @@
+services:
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    volumes:
+      - ./.my.cnf:/etc/.my.cnf:ro
+    command:
+      - "--config.my-cnf=/etc/.my.cnf"
+    ports:
+      - "9104:9104"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9091:9090"
+    restart: unless-stopped
+    depends_on:
+      - mysqld-exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+volumes:
+  grafana-data:

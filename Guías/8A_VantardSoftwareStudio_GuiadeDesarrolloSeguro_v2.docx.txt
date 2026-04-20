@@ -87,7 +87,7 @@ Front-end        25
 General        25
 Apéndice A: Convenciones de Nombres        26
 A.1 Back-end (Python/Django)        26
-A.2 Front-end (TypeScript/React)        26
+A.2 Front-end (javascript/React)        26
 A.3 Base de datos        26
 Apéndice B: Inventario de Archivos por Módulo        28
 Back-end        28
@@ -217,7 +217,7 @@ Tecnología
 	React
 	18+
 	Framework SPA principal
-	TypeScript
+	javascript
 	5+
 	Tipado estático para mayor seguridad
 	Vite
@@ -298,7 +298,7 @@ client/src/
 ├── components/                # Componentes reutilizables
 ├── services/                  # Un archivo por dominio
 ├── utils/                     # Funciones puras de apoyo
-└── types/                     # Interfaces y tipos TypeScript
+└── types/                     # Interfaces y tipos javascript
 4.3 Estructura del Back-end
 Dentro de server/:
 server/
@@ -825,7 +825,7 @@ Front-end
    * Las URLs del API están en constants/endpoints.ts, no inline en los componentes.
    * Los servicios no filtran detalles internos del backend a la UI.
    * El interceptor de Axios maneja correctamente el 401 y fuerza logout.
-   * type-check (tsc --noEmit) pasa sin errores de TypeScript.
+   * type-check (tsc --noEmit) pasa sin errores de javascript.
    * npm run build pasa sin errores.
 General
    * No hay console.log ni código de debug en el commit.
@@ -865,7 +865,7 @@ Elemento
 	Archivos
 	snake_case
 	models.py, serializers.py, views.py
-	A.2 Front-end (TypeScript/React)
+	A.2 Front-end (javascript/React)
 
 
 Elemento

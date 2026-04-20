@@ -1,0 +1,402 @@
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.db.models import Sum
+import re
+from .models import User
+from user_plans.models import UserPlan
+from deployments.models import Deployment
+
+
+EMAIL_ALREADY_EXISTS_MSG = 'Ya existe una cuenta con este correo.'
+FIRST_NAME_LABEL = 'El nombre'
+LAST_NAME_LABEL = 'El apellido'
+
+# Nota: Ñ/ñ ya están incluidos en los rangos Unicode À-Ö y Ø-ö/ø-ÿ.
+NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ\s'.-]+$")
+
+
+def _validate_person_name(value, field_label):
+    normalized = str(value or '').strip()
+    if not normalized:
+        raise serializers.ValidationError(f'{field_label} es obligatorio.')
+    if not NAME_PATTERN.match(normalized):
+        raise serializers.ValidationError(
+            f'{field_label} solo permite letras, espacios, puntos, apostrofe y guion.'
+        )
+    return normalized
+
+
+def _validate_strong_password(value):
+    pwd = str(value or '').strip()
+    errors = []
+
+    if len(pwd) < 8:
+        errors.append('La contraseña debe tener al menos 8 caracteres.')
+    if not re.search(r'[A-Z]', pwd):
+        errors.append('La contraseña debe incluir al menos una mayúscula.')
+    if not re.search(r'[a-z]', pwd):
+        errors.append('La contraseña debe incluir al menos una minúscula.')
+    if not re.search(r'\d', pwd):
+        errors.append('La contraseña debe incluir al menos un número.')
+    if not re.search(r'[^A-Za-z0-9]', pwd):
+        errors.append('La contraseña debe incluir al menos un carácter especial.')
+
+    if errors:
+        raise serializers.ValidationError(errors)
+
+    validate_password(pwd)
+    return pwd
+
+
+# ---------------------------------------------------------------------------
+# Registro
+# ---------------------------------------------------------------------------
+
+class UserRegisterSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=100)
+    last_name  = serializers.CharField(max_length=100)
+    email      = serializers.EmailField(max_length=150)
+    password   = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
+        return value.lower()
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, FIRST_NAME_LABEL)
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, LAST_NAME_LABEL)
+
+    def validate_password(self, value):
+        return _validate_strong_password(value)
+
+
+# ---------------------------------------------------------------------------
+# Login
+# ---------------------------------------------------------------------------
+
+class UserLoginSerializer(serializers.Serializer):
+    email    = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Refresh token
+# ---------------------------------------------------------------------------
+
+class TokenRefreshInputSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+# ---------------------------------------------------------------------------
+# Logout
+# ---------------------------------------------------------------------------
+
+class UserLogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+# ---------------------------------------------------------------------------
+# Perfil (lectura)
+# ---------------------------------------------------------------------------
+
+class UserProfileOutputSerializer(serializers.ModelSerializer):
+
+    role_name = serializers.SerializerMethodField()
+    plan_id = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+    plan_status = serializers.SerializerMethodField()
+    plan_max_disk_mb = serializers.SerializerMethodField()
+    used_disk_mb = serializers.SerializerMethodField()
+    active_site_domain = serializers.SerializerMethodField()
+    active_site_disk_used_mb = serializers.SerializerMethodField()
+    total_traffic_visit_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'status',
+            'role_name',
+            'plan_id',
+            'plan_name',
+            'plan_status',
+            'plan_max_disk_mb',
+            'used_disk_mb',
+            'active_site_domain',
+            'active_site_disk_used_mb',
+            'total_traffic_visit_count',
+            'created_at',
+            'updated_at',
+        ]
+
+    def _get_latest_active_deployment(self, obj):
+        return (
+            Deployment.objects.filter(
+                user=obj,
+                status=Deployment.StatusChoices.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .order_by('-created_at')
+            .first()
+        )
+
+    def get_role_name(self, obj):
+        return obj.role.role_name if obj.role else None
+
+    def _get_active_user_plan(self, obj):
+        return (
+            UserPlan.objects.filter(
+                user=obj,
+                status=UserPlan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related('plan')
+            .first()
+        )
+
+    def get_plan_id(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.plan_id if user_plan else None
+
+    def get_plan_name(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.plan.name if user_plan and user_plan.plan else None
+
+    def get_plan_status(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.status if user_plan else None
+
+    def get_plan_max_disk_mb(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.plan.max_disk_mb if user_plan and user_plan.plan else 0
+
+    def get_used_disk_mb(self, obj):
+        deployment = self._get_latest_active_deployment(obj)
+        return int(getattr(deployment, 'disk_used_mb', 0) or 0)
+
+    def get_active_site_domain(self, obj):
+        deployment = self._get_latest_active_deployment(obj)
+        return getattr(deployment, 'domain', None)
+
+    def get_active_site_disk_used_mb(self, obj):
+        return self.get_used_disk_mb(obj)
+
+    def get_total_traffic_visit_count(self, obj):
+        total = (
+            Deployment.objects.filter(
+                user=obj,
+                deleted_at__isnull=True,
+            ).aggregate(total=Sum('traffic_visit_count'))
+        ).get('total')
+        return int(total or 0)
+
+
+# ---------------------------------------------------------------------------
+# Actualizar perfil
+# ---------------------------------------------------------------------------
+
+class UserUpdateProfileSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=100, required=False)
+    last_name  = serializers.CharField(max_length=100, required=False)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError('Debes enviar al menos un campo para actualizar.')
+        return attrs
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, FIRST_NAME_LABEL)
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, LAST_NAME_LABEL)
+
+
+# ---------------------------------------------------------------------------
+# Cambiar contraseña
+# ---------------------------------------------------------------------------
+
+class UserChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password     = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        return _validate_strong_password(value)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError('Las contraseñas nuevas no coinciden.')
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# Admin – creación y edición de usuarios por admin
+# ---------------------------------------------------------------------------
+
+
+class AdminCreateUserSerializer(serializers.Serializer):
+    first_name       = serializers.CharField(max_length=100)
+    last_name        = serializers.CharField(max_length=100)
+    email            = serializers.EmailField(max_length=150)
+    password         = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
+        return value.lower()
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, FIRST_NAME_LABEL)
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, LAST_NAME_LABEL)
+
+    def validate_password(self, value):
+        return _validate_strong_password(value)
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError('Las contraseñas no coinciden.')
+        return attrs
+
+
+class AdminUpdateUserSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=100)
+    last_name  = serializers.CharField(max_length=100)
+    email      = serializers.EmailField(max_length=150)
+
+    def validate_first_name(self, value):
+        return _validate_person_name(value, FIRST_NAME_LABEL)
+
+    def validate_last_name(self, value):
+        return _validate_person_name(value, LAST_NAME_LABEL)
+
+    def validate_email(self, value):
+        normalized = value.lower()
+        user = self.context.get('user')
+        qs = User.objects.filter(email=normalized)
+        if user is not None:
+            qs = qs.exclude(pk=user.pk)
+        if qs.exists():
+            raise serializers.ValidationError(EMAIL_ALREADY_EXISTS_MSG)
+        return normalized
+
+
+# ---------------------------------------------------------------------------
+# Admin – listado de usuarios
+# ---------------------------------------------------------------------------
+
+class UserListOutputSerializer(serializers.ModelSerializer):
+
+    role_name = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+    total_deployments = serializers.SerializerMethodField()
+    used_disk_mb = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'status',
+            'role_name',
+            'plan_name',
+            'total_deployments',
+            'used_disk_mb',
+            'created_at',
+        ]
+
+    def get_role_name(self, obj):
+        if obj.role:
+            return obj.role.role_name
+
+        # Fallback para usuarios que aún no tienen rol asignado en DB.
+        # Si es superusuario/staff lo tratamos como Admin, en caso contrario como User.
+        if getattr(obj, 'is_superuser', False) or getattr(obj, 'is_staff', False):
+            return 'Admin'
+
+        return 'User'
+
+    def _get_active_user_plan(self, obj):
+        cached_plans = self.context.get('active_plans_by_user') or {}
+        user_plan = cached_plans.get(obj.pk)
+        if user_plan is not None:
+            return user_plan
+
+        return (
+            UserPlan.objects.filter(
+                user=obj,
+                status=UserPlan.Status.ACTIVE,
+                deleted_at__isnull=True,
+            )
+            .select_related('plan')
+            .first()
+        )
+
+    def get_plan_name(self, obj):
+        user_plan = self._get_active_user_plan(obj)
+        return user_plan.plan.name if user_plan and user_plan.plan else None
+
+    def get_total_deployments(self, obj):
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('total_deployments') or 0)
+
+        return Deployment.objects.filter(
+            user=obj,
+            deleted_at__isnull=True,
+        ).count()
+
+    def get_used_disk_mb(self, obj):
+        stats_by_user = self.context.get('deployment_stats_by_user') or {}
+        stats = stats_by_user.get(obj.pk)
+        if stats is not None:
+            return int(stats.get('used_disk_mb') or 0)
+
+        value = (
+            Deployment.objects.filter(user=obj, deleted_at__isnull=True)
+            .values_list('disk_used_mb', flat=True)
+        )
+        return int(sum(value or [0]))
+
+
+# ---------------------------------------------------------------------------
+# Admin – cambiar status de usuario
+# ---------------------------------------------------------------------------
+
+class UserUpdateStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=User.StatusChoices.choices)
+
+
+# ---------------------------------------------------------------------------
+# Restablecer contraseña por correo
+# ---------------------------------------------------------------------------
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        return _validate_strong_password(value)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError('Las contraseñas no coinciden.')
+        return attrs
+    

@@ -9,6 +9,14 @@
 !.env.example
 !.env.*.example
 
+# SonarQube (token local va por variable de entorno, no en archivo)
+.sonar/
+sonar-project.local.properties
+
+# Guías / documentación interna (no es código del repo)
+Guías/
+Guias/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
@@ -31,6 +39,8 @@ db.sqlite3-journal
 staticfiles/
 media/
 
+# Migraciones — se versiona para que Render pueda ejecutar migrate en build.sh
+
 # --- Node / Vite ---
 node_modules/
 dist/
@@ -38,6 +48,9 @@ dist-ssr/
 build/
 .vite/
 *.local
+
+# Lockfile (evitar cambios ruidosos si no se versiona)
+package-lock.json
 
 # --- Logs ---
 logs/

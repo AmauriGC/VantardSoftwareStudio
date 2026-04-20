@@ -1,0 +1,123 @@
+{
+  "dashboard": {
+    "uid": "96f3996f-38d7-4b0d-9af2-9f3f04ffa856",
+    "title": "VantardSoftwareStudio — Monitoreo MySQL",
+    "tags": ["mysql","vantard","monitoreo"],
+    "timezone": "browser",
+    "refresh": "15s",
+    "schemaVersion": 38,
+    "version": 1,
+    "panels": [
+      {
+        "type": "stat", "title": "1. MySQL UP", "id": 1,
+        "gridPos": {"x":0,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"mappings":[{"type":"value","options":{"1":{"text":"ACTIVO","color":"green","index":0},"0":{"text":"CAIDO","color":"red","index":1}}}],"thresholds":{"mode":"absolute","steps":[{"color":"red","value":null},{"color":"green","value":1}]},"color":{"mode":"thresholds"}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_up","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "5. Threads Conectados", "id": 2,
+        "gridPos": {"x":4,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":50},{"color":"red","value":100}]},"color":{"mode":"thresholds"},"unit":"short"}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_threads_connected","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "7. Conexiones Totales", "id": 3,
+        "gridPos": {"x":8,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"thresholds":{"mode":"absolute","steps":[{"color":"blue","value":null}]},"color":{"mode":"thresholds"},"unit":"short"}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_connections","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "4. Slow Queries", "id": 4,
+        "gridPos": {"x":12,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":10}]},"color":{"mode":"thresholds"},"unit":"short"}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_slow_queries","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "6. Aborted Connects", "id": 5,
+        "gridPos": {"x":16,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":20}]},"color":{"mode":"thresholds"},"unit":"short"}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_aborted_connects","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "13. Deadlocks InnoDB", "id": 6,
+        "gridPos": {"x":20,"y":0,"w":4,"h":4},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none"},
+        "fieldConfig": {"defaults": {"thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]},"color":{"mode":"thresholds"},"unit":"short"}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_innodb_deadlocks","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "gauge", "title": "8. Buffer Pool Hit Rate (%)", "id": 7,
+        "gridPos": {"x":0,"y":4,"w":6,"h":7},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"showThresholdLabels":false,"showThresholdMarkers":true},
+        "fieldConfig": {"defaults": {"min":0,"max":100,"unit":"percent","thresholds":{"mode":"absolute","steps":[{"color":"red","value":null},{"color":"yellow","value":80},{"color":"green","value":95}]},"color":{"mode":"thresholds"}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"(1 - (rate(mysql_global_status_innodb_buffer_pool_reads[5m]) / rate(mysql_global_status_innodb_buffer_pool_read_requests[5m]))) * 100","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "gauge", "title": "10. Full Table Scan Ratio (%)", "id": 8,
+        "gridPos": {"x":6,"y":4,"w":6,"h":7},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"showThresholdLabels":false,"showThresholdMarkers":true},
+        "fieldConfig": {"defaults": {"min":0,"max":100,"unit":"percent","thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":15},{"color":"red","value":30}]},"color":{"mode":"thresholds"}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"(rate(mysql_global_status_select_scan[5m]) / rate(mysql_global_status_questions[5m])) * 100","instant":true,"refId":"A"}]
+      },
+      {
+        "type": "stat", "title": "3. Avg Response Time — performance_schema", "id": 14,
+        "gridPos": {"x":12,"y":4,"w":6,"h":7},
+        "options": {"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","graphMode":"none","text":{"valueSize":28}},
+        "fieldConfig": {"defaults": {"unit":"s","decimals":6,"thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":0.1},{"color":"red","value":1}]},"color":{"mode":"thresholds"},"noValue":"Sin datos"}},
+        "targets": [{"datasource":{"type":"mysql","uid":"ffje957u23gg0e"},"rawSql":"SELECT NOW() AS time, ROUND(SUM(SUM_TIMER_WAIT) / SUM(COUNT_STAR) / 1000000000000, 6) AS avg_response_time_sec FROM performance_schema.events_statements_summary_by_digest WHERE COUNT_STAR > 0","format":"time_series","refId":"A"}]
+      },
+      {
+        "type": "timeseries", "title": "2. Tasa de Consultas / segundo", "id": 9,
+        "gridPos": {"x":18,"y":4,"w":6,"h":7},
+        "options": {"tooltip":{"mode":"single"},"legend":{"displayMode":"list","placement":"bottom"}},
+        "fieldConfig": {"defaults": {"unit":"reqps","color":{"mode":"palette-classic"},"custom":{"lineWidth":2,"fillOpacity":10}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"rate(mysql_global_status_queries[1m])","legendFormat":"queries/s","refId":"A"}]
+      },
+      {
+        "type": "timeseries", "title": "5. Threads Conectados (histórico)", "id": 10,
+        "gridPos": {"x":0,"y":11,"w":12,"h":7},
+        "options": {"tooltip":{"mode":"single"},"legend":{"displayMode":"list","placement":"bottom"}},
+        "fieldConfig": {"defaults": {"unit":"short","color":{"mode":"palette-classic"},"custom":{"lineWidth":2,"fillOpacity":10}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_threads_connected","legendFormat":"threads","refId":"A"}]
+      },
+      {
+        "type": "timeseries", "title": "9. Páginas InnoDB escritas/s", "id": 11,
+        "gridPos": {"x":12,"y":11,"w":12,"h":7},
+        "options": {"tooltip":{"mode":"single"},"legend":{"displayMode":"list","placement":"bottom"}},
+        "fieldConfig": {"defaults": {"unit":"short","color":{"mode":"palette-classic"},"custom":{"lineWidth":2,"fillOpacity":10}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"rate(mysql_global_status_innodb_pages_written[5m])","legendFormat":"páginas/s","refId":"A"}]
+      },
+      {
+        "type": "timeseries", "title": "11. Errores de Conexión (por tipo)", "id": 12,
+        "gridPos": {"x":0,"y":18,"w":12,"h":7},
+        "options": {"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
+        "fieldConfig": {"defaults": {"unit":"short","color":{"mode":"palette-classic"},"custom":{"lineWidth":2,"fillOpacity":10}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_connection_errors_total","legendFormat":"{{error}}","refId":"A"}]
+      },
+      {
+        "type": "timeseries", "title": "7. Conexiones Totales Acumuladas", "id": 13,
+        "gridPos": {"x":12,"y":18,"w":12,"h":7},
+        "options": {"tooltip":{"mode":"single"},"legend":{"displayMode":"list","placement":"bottom"}},
+        "fieldConfig": {"defaults": {"unit":"short","color":{"mode":"palette-classic"},"custom":{"lineWidth":2,"fillOpacity":10}}},
+        "targets": [{"datasource":{"type":"prometheus","uid":"ffje8qucjdi4gb"},"expr":"mysql_global_status_connections","legendFormat":"conexiones","refId":"A"}]
+      },
+      {
+        "type": "table", "title": "12. Fragmentación de Tablas (DATA_FREE)", "id": 15,
+        "gridPos": {"x":0,"y":25,"w":24,"h":8},
+        "options": {"showHeader":true,"cellHeight":"sm","footer":{"show":false}},
+        "fieldConfig": {
+          "defaults": {"custom":{"align":"auto","displayMode":"auto"}},
+          "overrides": [{"matcher":{"id":"byName","options":"DATA_FREE"},"properties":[{"id":"unit","value":"bytes"},{"id":"custom.width","value":160},{"id":"thresholds","value":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":1048576},{"color":"red","value":10485760}]}},{"id":"custom.displayMode","value":"color-background"}]}]
+        },
+        "targets": [{"datasource":{"type":"mysql","uid":"ffje957u23gg0e"},"rawSql":"SELECT TABLE_SCHEMA, TABLE_NAME, DATA_FREE FROM information_schema.tables WHERE DATA_FREE > 0 ORDER BY DATA_FREE DESC LIMIT 20","format":"table","refId":"A"}]
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}

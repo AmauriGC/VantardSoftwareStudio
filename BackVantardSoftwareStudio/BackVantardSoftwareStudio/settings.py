@@ -10,11 +10,75 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import os
+
 from pathlib import Path
+import logging.config
+from datetime import timedelta
+from decouple import config, Csv
+from loguru import logger
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGGING_CONFIG = None
+
+LOG_FORMAT = (
+    '{time:YYYY-MM-DD HH:mm:ss} | {level:<8} | {name}:{function}:{line} - {message}'
+)
+
+LOG_ROTATION_SIZE = '10 MB'
+
+logger.configure(
+    handlers=[
+        {
+            'sink': str(LOG_DIR / 'debug.log'),
+            'level': 'DEBUG',
+            'rotation': LOG_ROTATION_SIZE,
+            'retention': '7 days',
+            'compression': 'zip',
+            'format': LOG_FORMAT,
+        },
+        {
+            'sink': str(LOG_DIR / 'error.log'),
+            'level': 'ERROR',
+            'rotation': LOG_ROTATION_SIZE,
+            'retention': '7 days',
+            'compression': 'zip',
+            'backtrace': True,
+            'diagnose': True,
+            'format': LOG_FORMAT,
+        },
+        {
+            'sink': str(LOG_DIR / 'security.log'),
+            'level': 'INFO',
+            'rotation': LOG_ROTATION_SIZE,
+            'retention': '30 days',
+            'compression': 'zip',
+            'format': LOG_FORMAT,
+            'filter': lambda record: record['extra'].get('security') is True,
+        },
+    ]
+)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'loguru': {
+            'class': 'kernel.interceptor.InterceptorHandler',
+        },
+    },
+    'root': {
+        'handlers': ['loguru'],
+        'level': 'DEBUG',
+    },
+}
+
+logging.config.dictConfig(LOGGING)
 
 
 def _env_bool(value: str | None, default: bool = False) -> bool:
@@ -22,6 +86,8 @@ def _env_bool(value: str | None, default: bool = False) -> bool:
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 # Cargar variables desde .env (si está disponible)
 try:
@@ -36,15 +102,7 @@ except Exception:
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me")
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = _env_bool(os.environ.get("DEBUG"), default=True)
-
-_allowed_hosts = os.environ.get("ALLOWED_HOSTS", "127.0.0.1,localhost")
-ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(",") if h.strip()]
-
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost', cast=Csv())
 
 # Application definition
 
@@ -55,11 +113,25 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core'
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist', 
+    'corsheaders',
+    'core',
+    'system_logs',
+    'users',
+    'plans',
+    'deployments',
+    'user_plans',
+    'plan_change_request',
+    'roles',
+    'anymail',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -88,83 +160,106 @@ TEMPLATES = [
 WSGI_APPLICATION = 'BackVantardSoftwareStudio.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(
+        config('MYSQL_PUBLIC_URL'),
+        conn_max_age=600,
+    )
 }
 
-database_url = os.environ.get("DATABASE_URL")
-if database_url:
-    try:
-        import dj_database_url
+AUTH_USER_MODEL = 'users.User'
 
-        DATABASES["default"] = dj_database_url.config(
-            default=database_url,
-            conn_max_age=60,
-            ssl_require=False,
-        )
-    except Exception:
-        # Si dj-database-url no está instalado, se mantiene la configuración default.
-        pass
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
 
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
 
-# (Opcional) CORS/CSRF por variables de entorno
-cors_allowed_origins = os.environ.get("CORS_ALLOWED_ORIGINS")
-if cors_allowed_origins:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in cors_allowed_origins.split(",") if origin.strip()
-    ]
+    'EXCEPTION_HANDLER': 'kernel.exceptions.custom_exception_handler',
 
-csrf_trusted_origins = os.environ.get("CSRF_TRUSTED_ORIGINS")
-if csrf_trusted_origins:
-    CSRF_TRUSTED_ORIGINS = [
-        origin.strip() for origin in csrf_trusted_origins.split(",") if origin.strip()
-    ]
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 
+    # Throttling base: se aplica por scope en endpoints sensibles (login/recovery).
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'auth_login': '5/minute',
+        'recovery_request': '3/minute',
+        'recovery_confirm': '10/minute',
+    },
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME':        timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME':       timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS':        True,   # emite nuevo refresh en cada uso
+    'BLACKLIST_AFTER_ROTATION':     True,   # invalida el refresh anterior
+    'ALGORITHM':                    'HS256',
+    'SIGNING_KEY':                  config('JWT_SECRET'),
+    'AUTH_HEADER_TYPES':            ('Bearer',),
+    'AUTH_HEADER_NAME':             'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD':                'id',
+    'USER_ID_CLAIM':                'user_id',
+}
+
+_cors_origins = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173')
+CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+CORS_ALLOW_CREDENTIALS = True # cambiar solo para react 
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+     'OPTIONS': {'min_length': 8}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'UTC'
-
-USE_I18N = True
-
-USE_TZ = True
-
+LANGUAGE_CODE = 'es'
+TIME_ZONE     = 'America/Mexico_City'
+USE_I18N      = True
+USE_TZ        = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [ BASE_DIR / 'static' ]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+MEDIA_URL   = '/media/'
+MEDIA_ROOT  = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEPLOYMENT_BASE_URL = config('DEPLOYMENT_BASE_URL', default='http://localhost:8000')
+
+# Password reset / correo
+# PASSWORD_RESET_TIMEOUT: tiempo en segundos que dura válido el token de restablecimiento.
+# Django default: 259200 (3 días). Valor recomendado: 3600 (1 hora).
+PASSWORD_RESET_TIMEOUT = config('PASSWORD_RESET_TIMEOUT', default=3600, cast=int)
+FRONTEND_URL      = config('FRONTEND_URL', default='http://localhost:5173')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='vantardsoftwarestudio@gmail.com')
+EMAIL_BACKEND     = config('EMAIL_BACKEND', default='anymail.backends.resend.EmailBackend')
+
+ANYMAIL = {
+    'RESEND_API_KEY': config('RESEND_API_KEY', default=''),
+}
+
+# ---------------------------------------------------------------------------
+# Cifrado AES-256-CBC — endpoint password-reset/confirm
+# ---------------------------------------------------------------------------
+AES_SECRET_KEY = config('AES_SECRET_KEY')
