@@ -181,12 +181,6 @@ def deploy_zip_as_new_deployment(*, user, domain: str, zip_file, active_plan: Us
 
         entry_subdir = detect_site_entry_subdir(media_root / 'sites' / domain)
 
-        # Éxito: recién aquí reemplazamos SOLO el/los activos previos del usuario
-        (
-            Deployment.objects.filter(user=user, status=Deployment.StatusChoices.ACTIVE, deleted_at__isnull=True)
-            .update(status=Deployment.StatusChoices.REPLACED)
-        )
-
         deployment = Deployment.objects.create(
             user=user,
             domain=domain,
