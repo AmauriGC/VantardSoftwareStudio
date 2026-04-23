@@ -15,6 +15,7 @@ BEFORE INSERT ON `deployments`
 FOR EACH ROW
 BEGIN
     DECLARE allowed_space INT;
+    DECLARE current_used  INT DEFAULT 0;
 
     SELECT p.max_disk_mb
     INTO allowed_space
@@ -25,7 +26,13 @@ BEGIN
       AND up.deleted_at IS NULL
     LIMIT 1;
 
-    IF allowed_space IS NOT NULL AND NEW.disk_used_mb > allowed_space THEN
+    SELECT COALESCE(SUM(disk_used_mb), 0)
+    INTO current_used
+    FROM deployments
+    WHERE user_id = NEW.user_id
+      AND deleted_at IS NULL;
+
+    IF allowed_space IS NOT NULL AND (current_used + NEW.disk_used_mb) > allowed_space THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Storage limit exceeded for current plan';
     END IF;
@@ -37,28 +44,17 @@ DROP TRIGGER IF EXISTS `trg_validate_single_active_deployment`;
 
 DELIMITER $$
 
--- Guardia de integridad: MySQL no permite UPDATE sobre la misma tabla dentro de un trigger
--- (error 1442), por eso el reemplazo de deployments activos se hace desde Django.
--- Este trigger actúa como segundo nivel de defensa: si Django falla y llega un INSERT
--- con status='active' habiendo ya uno activo para ese usuario, MySQL lo rechaza.
 CREATE TRIGGER `trg_validate_single_active_deployment`
 BEFORE INSERT ON `deployments`
 FOR EACH ROW
 BEGIN
-    DECLARE active_count INT DEFAULT 0;
-
     IF NEW.status = 'active' THEN
-        SELECT COUNT(*)
-        INTO active_count
-        FROM deployments
+        UPDATE deployments
+        SET status = 'replaced',
+            updated_at = NOW()
         WHERE user_id = NEW.user_id
           AND status = 'active'
           AND deleted_at IS NULL;
-
-        IF active_count > 0 THEN
-            SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'El usuario ya tiene un deployment activo. El anterior debe reemplazarse primero.';
-        END IF;
     END IF;
 END$$
 
