@@ -44,7 +44,6 @@ export const ENDPOINTS = {
   },
   systemLogs: {
     list: "/api/system-logs/",
-    download: "/api/system-logs/download/",
     detail: (id) => `/api/system-logs/${id}/`,
   },
   dashboard: {
